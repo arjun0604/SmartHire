@@ -1,0 +1,239 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/plus-jakarta-sans";
+@import "@fontsource/playfair-display";
+
+@font-face {
+  font-family: 'Nib Pro';
+  src: local('Nib Pro'), local('NibPro-Regular'), local('Nib Pro Regular'),
+       url("https://db.onlinewebfonts.com/t/dbd8079261e2975f3b6054e95088095d.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nib Pro';
+  src: local('Nib Pro Italic'), local('NibPro-Italic'), local('Nib Pro-Italic'),
+       url("https://db.onlinewebfonts.com/t/d511c470de4f835fb2e191dc621fbc8f.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-serif);
+    --font-serif: 'Playfair Display', Georgia, Cambria, 'Times New Roman', Times, serif;
+    --font-sans: 'Plus Jakarta Sans Variable', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+
+    --color-terracotta: #8C4A32;
+    --color-terracotta-dark: #76361E;
+    --color-cream: #FAF8F5;
+    --color-cream-muted: #F4EFEA;
+    --color-charcoal: #1C1917;
+
+    --radius-sm: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+}
+
+:root {
+    --background: #FAF8F5;
+    --foreground: #1C1917;
+
+    --card: #FFFFFF;
+    --card-foreground: #1C1917;
+
+    --popover: #FFFFFF;
+    --popover-foreground: #1C1917;
+
+    --primary: #8C4A32;
+    --primary-foreground: #FFFFFF;
+
+    --secondary: #F4EFEA;
+    --secondary-foreground: #1C1917;
+
+    --muted: #F4EFEA;
+    --muted-foreground: #78716C;
+
+    --accent: #EFE8DF;
+    --accent-foreground: #1C1917;
+
+    --destructive: #DC2626;
+    --border: #E6E0D6;
+    --input: #E6E0D6;
+    --ring: #8C4A32;
+
+    --radius: 0.375rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    letter-spacing: -0.01em;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+.font-nib {
+  font-family: 'Nib Pro', 'Playfair Display', Georgia, serif !important;
+}
+
+.custom-dob-picker.rs-picker-date {
+  width: 100%;
+}
+
+.blend-multiply {
+  mix-blend-mode: multiply !important;
+}
+
+.subtle-gif {
+  opacity: 0.85;
+  transition: opacity 0.3s ease;
+}
+
+.subtle-gif:hover {
+  opacity: 1;
+}
+
+.custom-dob-picker .rs-picker-toggle.rs-btn {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E6E0D6 !important;
+  border-radius: 0.375rem !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.875rem !important;
+  color: #1C1917 !important;
+  box-shadow: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  height: 42px !important;
+  transition: all 0.15s ease-in-out;
+}
+
+.custom-dob-picker .rs-picker-toggle.rs-btn:hover,
+.custom-dob-picker .rs-picker-toggle.rs-btn:focus,
+.custom-dob-picker.rs-picker-focused .rs-picker-toggle {
+  border-color: #8C4A32 !important;
+  box-shadow: 0 0 0 1px #8C4A32 !important;
+}
+
+.custom-dob-picker .rs-picker-toggle-value {
+  color: #1C1917 !important;
+  font-size: 0.875rem !important;
+}
+
+.custom-dob-picker .rs-picker-toggle-placeholder {
+  color: #A8A199 !important;
+  font-size: 0.875rem !important;
+}
+
+.custom-dob-picker .rs-picker-toggle-caret,
+.custom-dob-picker .rs-picker-toggle-clean {
+  color: #A8A199 !important;
+}
+
+.rs-calendar-table-cell-selected .rs-calendar-table-cell-content {
+  background-color: #8C4A32 !important;
+  color: #FFFFFF !important;
+}
+
+.rs-calendar-table-cell:hover .rs-calendar-table-cell-content {
+  background-color: #FAF2EE !important;
+  color: #8C4A32 !important;
+}
+
+.rs-calendar-table-cell-disabled {
+  opacity: 0.25 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+.rs-picker-toolbar {
+  display: none !important;
+}
+
+.rs-btn-primary {
+  background-color: #8C4A32 !important;
+}
+
+.rs-picker-popup,
+.rs-picker-menu,
+.rs-picker-daterange-menu,
+.rs-anim-fade {
+  z-index: 9999 !important;
+}
+
+.rs-calendar-header-title {
+  cursor: pointer !important;
+  color: #1C1917 !important;
+  font-weight: 600 !important;
+}
+
+.rs-calendar-header-title:hover {
+  color: #8C4A32 !important;
+}
+
+.rs-calendar-month-dropdown-cell.rs-calendar-month-dropdown-cell-selected .rs-calendar-month-dropdown-cell-content,
+.rs-calendar-month-dropdown-cell.rs-calendar-month-dropdown-cell-active .rs-calendar-month-dropdown-cell-content {
+  background-color: #8C4A32 !important;
+  color: #FFFFFF !important;
+  border-radius: 0.375rem !important;
+}
+
+.rs-calendar-month-dropdown-cell:hover .rs-calendar-month-dropdown-cell-content {
+  background-color: #FAF2EE !important;
+  color: #8C4A32 !important;
+  border-radius: 0.375rem !important;
+}
+
+.rs-calendar-month-dropdown-cell-disabled,
+.rs-calendar-month-dropdown-year-disabled {
+  opacity: 0.25 !important;
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+}
+
+.rs-calendar-header-backward.rs-calendar-header-btn-disabled,
+.rs-calendar-header-backward[disabled],
+.rs-calendar-header-backward-disabled {
+  opacity: 0.25 !important;
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+}

@@ -1,0 +1,67 @@
+import { useEffect, useRef, useCallback } from "react";
+import { useAuth0 } from "@auth0/auth0-react";
+import { clearUserSession } from "../utils/auth-sync";
+
+interface IdleTimeoutOptions {
+  timeoutSeconds?: number;
+  onIdle?: () => void;
+}
+
+export function useIdleTimeout({
+  timeoutSeconds = 15,
+  onIdle,
+}: IdleTimeoutOptions = {}) {
+  const { isAuthenticated, logout } = useAuth0();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleLogoutOnIdle = useCallback(() => {
+    if (!isAuthenticated) return;
+
+    clearUserSession();
+
+    if (onIdle) {
+      onIdle();
+    }
+
+    logout({
+      logoutParams: {
+        returnTo: `${window.location.origin}/login?reason=inactivity`,
+      },
+    });
+  }, [isAuthenticated, logout, onIdle]);
+
+  const resetTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    if (isAuthenticated) {
+      timerRef.current = setTimeout(handleLogoutOnIdle, timeoutSeconds * 1000);
+    }
+  }, [isAuthenticated, handleLogoutOnIdle, timeoutSeconds]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const activityEvents = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "scroll",
+    ];
+
+    resetTimer();
+
+    const handleActivity = () => resetTimer();
+    activityEvents.forEach((evt) =>
+      window.addEventListener(evt, handleActivity, { passive: true })
+    );
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      activityEvents.forEach((evt) =>
+        window.removeEventListener(evt, handleActivity)
+      );
+    };
+  }, [isAuthenticated, resetTimer]);
+}
