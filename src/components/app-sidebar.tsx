@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { useUser } from "@context/UserContext"
 import {
   Sidebar,
@@ -11,22 +11,46 @@ import {
   Briefcase,
   Bookmark,
   FileCheck,
-  UserCog,
+  FileText,
+  IdCard,
   Users,
   Building2,
   ClipboardCheck,
+  CircleUserRound,
 } from "lucide-react"
 import { SmartHireIcon } from "@components/smart-hire-logo"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   activeTab?: string;
-  onSelectTab?: (tab: string) => void;
 }
 
-export function AppSidebar({ activeTab = "overview", onSelectTab, ...props }: AppSidebarProps) {
+export function AppSidebar({ activeTab: explicitActiveTab, ...props }: AppSidebarProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile } = useUser();
   const currentRole = profile?.role || "candidate";
+
+  const activeTab = React.useMemo(() => {
+    if (explicitActiveTab) {
+      return explicitActiveTab;
+    }
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get("tab");
+    if (tabParam) {
+      return tabParam;
+    }
+    const pathname = location.pathname.toLowerCase();
+    if (pathname.includes("/questions") || pathname.includes("/assessment")) {
+      return "assessments";
+    }
+    if (pathname.includes("/candidates")) {
+      return "candidates";
+    }
+    if (pathname === "/account") {
+      return "account";
+    }
+    return "overview";
+  }, [explicitActiveTab, location.pathname, location.search]);
 
   const candidateItems = [
     {
@@ -40,6 +64,11 @@ export function AppSidebar({ activeTab = "overview", onSelectTab, ...props }: Ap
       icon: <Briefcase className="size-5 lg:size-5.5 shrink-0" />,
     },
     {
+      id: "applications",
+      title: "My Applications",
+      icon: <FileText className="size-5 lg:size-5.5 shrink-0" />,
+    },
+    {
       id: "saved-jobs",
       title: "Saved Jobs",
       icon: <Bookmark className="size-5 lg:size-5.5 shrink-0" />,
@@ -51,8 +80,13 @@ export function AppSidebar({ activeTab = "overview", onSelectTab, ...props }: Ap
     },
     {
       id: "profile",
-      title: "Profile & Resume",
-      icon: <UserCog className="size-5 lg:size-5.5 shrink-0" />,
+      title: "Professional",
+      icon: <IdCard className="size-5 lg:size-5.5 shrink-0" />,
+    },
+    {
+      id: "account",
+      title: "Account Profile",
+      icon: <CircleUserRound className="size-5 lg:size-5.5 shrink-0" />,
     },
   ];
 
@@ -82,29 +116,21 @@ export function AppSidebar({ activeTab = "overview", onSelectTab, ...props }: Ap
       title: "Company Profile",
       icon: <Building2 className="size-5 lg:size-5.5 shrink-0" />,
     },
+    {
+      id: "account",
+      title: "Account Profile",
+      icon: <CircleUserRound className="size-5 lg:size-5.5 shrink-0" />,
+    },
   ];
 
   const navItems = currentRole === "recruiter" ? recruiterItems : candidateItems;
 
   const handleSelect = (tabId: string) => {
-    if (onSelectTab) {
-      onSelectTab(tabId);
+    if (tabId === "account") {
+      navigate("/account");
+      return;
     }
-    if (currentRole === "recruiter") {
-      if (tabId === "overview") navigate("/recruiter/dashboard");
-      else if (tabId === "postings") navigate("/recruiter/jobs");
-      else if (tabId === "candidates") navigate("/recruiter/candidates");
-      else if (tabId === "assessments") navigate("/recruiter/assessments");
-      else if (tabId === "company") navigate("/recruiter/company");
-      else navigate(`/dashboard?tab=${tabId}`);
-    } else {
-      if (tabId === "overview") navigate("/candidate/dashboard");
-      else if (tabId === "jobs") navigate("/candidate/jobs");
-      else if (tabId === "saved-jobs") navigate("/candidate/saved-jobs");
-      else if (tabId === "assessments") navigate("/candidate/assessments");
-      else if (tabId === "profile") navigate("/candidate/profile");
-      else navigate(`/dashboard?tab=${tabId}`);
-    }
+    navigate(`/dashboard?tab=${tabId}`);
   };
 
   return (
@@ -133,7 +159,7 @@ export function AppSidebar({ activeTab = "overview", onSelectTab, ...props }: Ap
                     className={`group/nav absolute left-0 top-0 flex items-center h-10 sm:h-11 lg:h-12 rounded-full transition-all duration-300 ease-out cursor-pointer shadow-3xs outline-none focus:outline-none px-2.5 sm:px-3 hover:pr-5 ${
                       isActive
                         ? "w-10 sm:w-11 lg:w-max hover:w-max lg:pr-5 bg-terracotta text-white border border-terracotta shadow-2xs z-20"
-                        : "w-10 sm:w-11 lg:w-12 hover:w-max bg-white text-[#78716C] border border-[#E6E0D6] hover:border-terracotta/40 hover:text-charcoal hover:bg-[#FAF8F5] z-10 hover:z-20"
+                        : "w-10 sm:w-11 lg:w-12 hover:w-max bg-white text-[#78716C] border border-[#E6E0D6] hover:border-terracotta/40 hover:text-charcoal hover:bg-cream z-10 hover:z-20"
                     }`}
                   >
                     <span className="flex size-5 sm:size-5.5 lg:size-6 shrink-0 items-center justify-center">

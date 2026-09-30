@@ -2,12 +2,10 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { useAuth0 } from "@auth0/auth0-react"
 import { AlertCircle, Loader2, ArrowRight } from "lucide-react"
-import { useUser } from "@context/UserContext"
 import { SocialAuthDivider, GoogleAuthButton } from "@components/social-auth-button"
 
 export function LoginForm() {
-  const { refreshUser } = useUser();
-  const { loginWithPopup, isLoading } = useAuth0();
+  const { loginWithPopup, isLoading, isAuthenticated } = useAuth0();
   const [authLoading, setAuthLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isInactiveTimeout] = useState(() => {
@@ -26,8 +24,6 @@ export function LoginForm() {
             }
           : undefined
       );
-
-      refreshUser();
     } catch (err: unknown) {
       console.error("Auth0 Login Error:", err);
       const authError = err as { error?: string; message?: string; error_description?: string };
@@ -37,7 +33,16 @@ export function LoginForm() {
     }
   };
 
-  const busy = isLoading || authLoading;
+  const busy = isLoading || authLoading || isAuthenticated;
+
+  if (isAuthenticated) {
+    return (
+      <div className="w-full max-w-md flex flex-col items-center justify-center p-8 space-y-4">
+        <Loader2 className="size-6 animate-spin text-terracotta" />
+        <p className="text-xs font-medium text-[#78716C]">Signing you in...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-md">

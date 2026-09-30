@@ -36,7 +36,7 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen w-full bg-[#FAF8F5] text-charcoal flex flex-col font-sans relative overflow-hidden">
+        <div className="min-h-screen w-full bg-cream text-charcoal flex flex-col font-sans relative overflow-hidden">
           <header className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
             <SmartHireLogo />
             <span className="text-[11px] font-mono uppercase tracking-widest text-red-700 px-2.5 py-1 rounded-full border border-red-200 bg-red-50">
@@ -61,7 +61,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
               {this.state.error && (
                 <div className="text-left bg-stone-50 border border-[#E6E0D6] rounded-md p-3 max-h-36 overflow-auto">
-                  <p className="text-[11px] font-mono text-red-700 break-words font-semibold">
+                  <p className="text-[11px] font-mono text-red-700 wrap-break-word font-semibold">
                     {this.state.error.toString()}
                   </p>
                 </div>
@@ -80,7 +80,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 <button
                   type="button"
                   onClick={this.handleReset}
-                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-[#E6E0D6] bg-white px-4 py-2.5 text-xs font-semibold text-charcoal hover:bg-[#FAF8F5] transition-colors cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-[#E6E0D6] bg-white px-4 py-2.5 text-xs font-semibold text-charcoal hover:bg-cream transition-colors cursor-pointer"
                 >
                   <Home className="size-3.5" />
                   <span>Go to Home</span>

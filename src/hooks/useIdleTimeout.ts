@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
-import { clearUserSession } from "../utils/auth-sync";
+import { useUser } from "../context/UserContext";
 
 interface IdleTimeoutOptions {
   timeoutSeconds?: number;
@@ -12,12 +12,13 @@ export function useIdleTimeout({
   onIdle,
 }: IdleTimeoutOptions = {}) {
   const { isAuthenticated, logout } = useAuth0();
+  const { clearSession } = useUser();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleLogoutOnIdle = useCallback(() => {
     if (!isAuthenticated) return;
 
-    clearUserSession();
+    clearSession();
 
     if (onIdle) {
       onIdle();
@@ -28,7 +29,7 @@ export function useIdleTimeout({
         returnTo: `${window.location.origin}/login?reason=inactivity`,
       },
     });
-  }, [isAuthenticated, logout, onIdle]);
+  }, [isAuthenticated, logout, clearSession, onIdle]);
 
   const resetTimer = useCallback(() => {
     if (timerRef.current) {

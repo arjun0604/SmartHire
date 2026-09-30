@@ -1,6 +1,6 @@
 import * as React from "react"
+import { useNavigate } from "react-router-dom"
 import { useAuth0 } from "@auth0/auth0-react"
-import { clearUserSession } from "@utils/auth-sync"
 import { useUser } from "@context/UserContext"
 import {
   Avatar,
@@ -8,36 +8,31 @@ import {
   AvatarImage,
 } from "@components/ui/avatar"
 import { CircleUserRoundIcon, BellIcon, LogOutIcon } from "lucide-react"
+import { getInitials } from "../utils/formatters"
 
 interface SiteHeaderProps {
   title?: string;
 }
 
 export function SiteHeader({ title = "Overview" }: SiteHeaderProps) {
-  const { user: auth0User, logout } = useAuth0();
-  const { profile } = useUser();
+  const navigate = useNavigate();
+  const { logout: auth0Logout } = useAuth0();
+  const { profile, clearSession } = useUser();
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 
   const user = {
-    name: profile?.name || auth0User?.name || "Member",
-    email: profile?.email || auth0User?.email || "member@smarthire.com",
-    avatar: profile?.picture || auth0User?.picture || "",
+    name: profile?.name || "Member",
+    email: profile?.email || "member@smarthire.com",
+    avatar: profile?.picture || "",
   };
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
+
 
   const handleLogout = () => {
-    clearUserSession();
+    clearSession();
     window.history.replaceState(null, "", "/login");
-    logout({
+    auth0Logout({
       logoutParams: {
         returnTo: `${window.location.origin}/login`,
       },
@@ -66,7 +61,7 @@ export function SiteHeader({ title = "Overview" }: SiteHeaderProps) {
         <button
           type="button"
           aria-label="Notifications"
-          className="flex size-8 sm:size-9 items-center justify-center rounded-full border border-[#E6E0D6] bg-white text-[#78716C] shadow-3xs transition-colors hover:border-terracotta/40 hover:text-charcoal hover:bg-[#FAF8F5] cursor-pointer outline-none focus:outline-none shrink-0"
+          className="flex size-8 sm:size-9 items-center justify-center rounded-full border border-[#E6E0D6] bg-white text-[#78716C] shadow-3xs transition-colors hover:border-terracotta/40 hover:text-charcoal hover:bg-cream cursor-pointer outline-none focus:outline-none shrink-0"
         >
           <BellIcon className="size-3.5 sm:size-4" />
         </button>
@@ -107,7 +102,10 @@ export function SiteHeader({ title = "Overview" }: SiteHeaderProps) {
               <div className="py-1">
                 <button
                   type="button"
-                  onClick={() => setDropdownOpen(false)}
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    navigate("/account");
+                  }}
                   className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-charcoal transition-colors hover:bg-cream hover:text-terracotta cursor-pointer"
                 >
                   <CircleUserRoundIcon className="size-4 text-[#78716C]" />

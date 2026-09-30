@@ -1,21 +1,29 @@
+import { syncUserWithBackend, getAvatarUrl } from "./api"
+import type { UserBackendResponse } from "./api"
+
 export type UserRole = "candidate" | "recruiter";
 
 export interface UserProfile {
   id: string;
+  auth0Id?: string;
   email: string;
   name: string;
   picture?: string;
   role: UserRole;
   company?: string | null;
+  companyId?: string | null;
+  candidateId?: string | null;
+  recruiterId?: string | null;
+  phone?: string;
+  location?: string;
   dob?: string;
+  resumeId?: string;
   resumeName?: string;
+  resumeUrl?: string;
   resumeText?: string;
   onboardingCompleted?: boolean;
   createdAt: string;
 }
-
-const USERS_KEY = "smarthire_users";
-const SESSION_KEY = "smarthire_session";
 
 export function extractRoleFromAuth0(auth0User?: Record<string, unknown> | null): UserRole | null {
   const role = auth0User?.["https://smarthire.com/role"];
@@ -35,35 +43,27 @@ function formatName(name?: string, email?: string): string {
     .join(" ");
 }
 
-function getUsers(): Record<string, UserProfile> {
-  try {
-    const data = localStorage.getItem(USERS_KEY);
-    return data ? JSON.parse(data) : {};
-  } catch {
-    return {};
-  }
+export function applyBackendData(profile: UserProfile, dbUser: UserBackendResponse): UserProfile {
+  return {
+    ...profile,
+    id: dbUser.id,
+    name: dbUser.name || profile.name,
+    companyId: dbUser.company_id ?? profile.companyId,
+    candidateId: dbUser.candidate_id ?? profile.candidateId,
+    recruiterId: dbUser.recruiter_id ?? profile.recruiterId,
+    company: dbUser.company_name ?? profile.company,
+    phone: dbUser.phone ?? profile.phone,
+    location: dbUser.location ?? profile.location,
+    dob: dbUser.dob ?? profile.dob,
+    resumeId: dbUser.resume_id ?? profile.resumeId,
+    resumeName: dbUser.resume_name ?? profile.resumeName,
+    resumeUrl: dbUser.resume_url ?? profile.resumeUrl,
+    picture: dbUser.picture_url !== undefined ? (dbUser.picture_url ? getAvatarUrl(dbUser.picture_url) : undefined) : profile.picture,
+    onboardingCompleted: dbUser.onboarding_completed ?? profile.onboardingCompleted,
+  };
 }
 
-function saveUsers(users: Record<string, UserProfile>): void {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-export function getActiveSession(): UserProfile | null {
-  try {
-    const userId = localStorage.getItem(SESSION_KEY);
-    if (!userId) return null;
-    const users = getUsers();
-    return users[userId] || null;
-  } catch {
-    return null;
-  }
-}
-
-function startSession(user: UserProfile): void {
-  localStorage.setItem(SESSION_KEY, user.id);
-}
-
-export function syncAuthUser(
+export function buildProfileFromAuth0(
   auth0User: {
     sub?: string;
     email?: string;
@@ -74,76 +74,123 @@ export function syncAuthUser(
 ): UserProfile {
   if (!auth0User?.sub) throw new Error("Invalid Auth0 user");
 
-  const users = getUsers();
-  const existing = users[auth0User.sub];
   const roleFromAuth0 = extractRoleFromAuth0(auth0User);
-
-  if (existing) {
-    if (roleFromAuth0) {
-      existing.role = roleFromAuth0;
-    }
-    if (auth0User.email) existing.email = auth0User.email;
-    if (auth0User.picture) existing.picture = auth0User.picture;
-    users[auth0User.sub] = existing;
-    saveUsers(users);
-    startSession(existing);
-    return existing;
-  }
-
   const assignedRole: UserRole = roleFromAuth0 || "candidate";
 
-  const profile: UserProfile = {
+  return {
     id: auth0User.sub,
+    auth0Id: auth0User.sub,
     email: auth0User.email || "",
     name: formatName(auth0User.name, auth0User.email),
     picture: auth0User.picture,
     role: assignedRole,
     company: assignedRole === "recruiter" ? null : undefined,
+    companyId: null,
+    candidateId: null,
+    recruiterId: null,
+    phone: undefined,
+    location: undefined,
+    dob: undefined,
+    resumeId: undefined,
+    resumeName: undefined,
+    resumeUrl: undefined,
+    resumeText: undefined,
     onboardingCompleted: false,
     createdAt: new Date().toISOString(),
   };
+}
 
-  users[auth0User.sub] = profile;
-  saveUsers(users);
-  startSession(profile);
-  return profile;
+export async function syncProfileToBackend(
+  profile: UserProfile,
+  options?: { is_onboarding_completion?: boolean; is_profile_update?: boolean }
+): Promise<UserProfile> {
+  const dbUser = await syncUserWithBackend({
+    auth0_id: profile.auth0Id || profile.id,
+    email: profile.email,
+    name: profile.name,
+    role: profile.role,
+    company_name: profile.company || undefined,
+    phone: profile.phone,
+    location: profile.location,
+    dob: profile.dob,
+    resume_name: profile.resumeName || undefined,
+    resume_text: profile.resumeText || undefined,
+    picture_url: profile.picture || undefined,
+    is_onboarding_completion: options?.is_onboarding_completion,
+    is_profile_update: options?.is_profile_update,
+  });
+  return applyBackendData(profile, dbUser);
 }
 
 export function updateCandidateProfile(
-  userId: string,
-  data: { name: string; dob: string; resumeName: string; resumeText?: string }
+  currentProfile: UserProfile,
+  data: { name: string; dob?: string; resumeName?: string; resumeUrl?: string; resumeText?: string; phone?: string; location?: string }
 ): UserProfile {
-  const users = getUsers();
-  const user = users[userId];
-  if (!user) throw new Error("User not found");
-
-  user.name = data.name.trim();
-  user.dob = data.dob;
-  user.resumeName = data.resumeName;
-  if (data.resumeText) user.resumeText = data.resumeText;
-  user.onboardingCompleted = true;
-
-  users[userId] = user;
-  saveUsers(users);
-  startSession(user);
-  return user;
+  return {
+    ...currentProfile,
+    name: data.name.trim(),
+    dob: data.dob !== undefined ? data.dob : currentProfile.dob,
+    resumeName: data.resumeName !== undefined ? data.resumeName : currentProfile.resumeName,
+    resumeUrl: data.resumeUrl !== undefined ? data.resumeUrl : currentProfile.resumeUrl,
+    resumeText: data.resumeText || currentProfile.resumeText,
+    phone: data.phone !== undefined ? data.phone : currentProfile.phone,
+    location: data.location !== undefined ? data.location : currentProfile.location,
+    onboardingCompleted: true,
+  };
 }
 
-export function updateRecruiterProfile(userId: string, name: string, company: string): UserProfile {
-  const users = getUsers();
-  const user = users[userId];
-  if (!user) throw new Error("User not found");
-
-  user.name = name.trim();
-  user.company = company.trim();
-  user.onboardingCompleted = true;
-
-  users[userId] = user;
-  saveUsers(users);
-  startSession(user);
-  return user;
+export interface RecruiterOnboardingData {
+  name: string;
+  company: string;
+  industry: string;
+  companySize: string;
+  headquarters: string;
+  description: string;
+  foundedYear?: number | null;
+  website?: string | null;
+  linkedin?: string | null;
+  logoUrl?: string | null;
 }
 
-export function clearUserSession(): void {
-  localStorage.removeItem(SESSION_KEY);
+export function updateRecruiterProfile(
+  currentProfile: UserProfile,
+  name: string,
+  company: string
+): UserProfile {
+  return {
+    ...currentProfile,
+    name: name.trim(),
+    company: company.trim(),
+    onboardingCompleted: true,
+  };
+}
+
+export async function syncRecruiterOnboardingToBackend(
+  profile: UserProfile,
+  data: RecruiterOnboardingData
+): Promise<UserProfile> {
+  const dbUser = await syncUserWithBackend({
+    auth0_id: profile.auth0Id || profile.id,
+    email: profile.email,
+    name: data.name.trim(),
+    role: "recruiter",
+    company_name: data.company.trim(),
+    industry: data.industry.trim() || undefined,
+    company_size: data.companySize.trim() || undefined,
+    headquarters: data.headquarters.trim() || undefined,
+    description: data.description.trim() || undefined,
+    founded_year: data.foundedYear || undefined,
+    website: data.website?.trim() || undefined,
+    linkedin: data.linkedin?.trim() || undefined,
+    logo_url: data.logoUrl || undefined,
+  });
+  return applyBackendData(
+    {
+      ...profile,
+      name: data.name.trim(),
+      company: data.company.trim(),
+      onboardingCompleted: true,
+    },
+    dbUser
+  );
 }

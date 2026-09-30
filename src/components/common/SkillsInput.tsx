@@ -1,19 +1,23 @@
 import { useState } from "react"
 import { X, Plus } from "lucide-react"
+import { validateSkill } from "../../utils/validation"
 
 interface SkillsInputProps {
   skills: string[];
   onChange: (newSkills: string[]) => void;
+  maxSkills?: number;
 }
 
-export function SkillsInput({ skills, onChange }: SkillsInputProps) {
+export function SkillsInput({ skills, onChange, maxSkills = 20 }: SkillsInputProps) {
   const [input, setInput] = useState("");
 
   const handleAdd = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmed = input.trim();
-    if (!trimmed) return;
-    if (!skills.includes(trimmed)) {
+    if (!trimmed || !validateSkill(trimmed).isValid) return;
+    if (skills.length >= maxSkills) return;
+    const exists = skills.some((s) => s.toLowerCase() === trimmed.toLowerCase());
+    if (!exists) {
       onChange([...skills, trimmed]);
     }
     setInput("");
@@ -24,7 +28,7 @@ export function SkillsInput({ skills, onChange }: SkillsInputProps) {
   };
 
   return (
-    <div className="p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded-lg space-y-2 focus-within:border-terracotta focus-within:ring-1 focus-within:ring-terracotta focus-within:bg-white transition-all shadow-3xs">
+    <div className="p-2.5 bg-cream border border-[#E6E0D6] rounded-lg space-y-2 focus-within:border-terracotta focus-within:ring-1 focus-within:ring-terracotta focus-within:bg-white transition-all shadow-3xs">
       <div className="flex flex-wrap gap-1.5">
         {skills.map((skill) => (
           <span
@@ -48,19 +52,26 @@ export function SkillsInput({ skills, onChange }: SkillsInputProps) {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onBlur={() => handleAdd()}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
               handleAdd();
             }
           }}
-          placeholder="Type a skill and press Enter..."
-          className="flex-1 bg-transparent text-xs sm:text-sm text-charcoal placeholder-[#A8A199] outline-none py-1"
+          disabled={skills.length >= maxSkills}
+          placeholder={
+            skills.length >= maxSkills
+              ? `Maximum ${maxSkills} skills reached`
+              : "Type a skill and press Enter or Tab..."
+          }
+          className="flex-1 bg-transparent text-xs sm:text-sm text-charcoal placeholder-[#A8A199] outline-none py-1 disabled:opacity-50"
         />
         <button
           type="button"
           onClick={() => handleAdd()}
-          className="px-2.5 py-1 rounded-md bg-white border border-[#E6E0D6] text-xs font-medium text-charcoal hover:border-terracotta hover:text-terracotta transition-colors flex items-center gap-1 cursor-pointer"
+          disabled={skills.length >= maxSkills || !input.trim()}
+          className="px-2.5 py-1 rounded-md bg-white border border-[#E6E0D6] text-xs font-medium text-charcoal hover:border-terracotta hover:text-terracotta transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Plus className="size-3" />
           <span>Add</span>
@@ -69,3 +80,4 @@ export function SkillsInput({ skills, onChange }: SkillsInputProps) {
     </div>
   );
 }
+

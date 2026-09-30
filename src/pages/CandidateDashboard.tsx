@@ -1,38 +1,46 @@
-import { useState, useEffect } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useEffect } from "react"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { useUser } from "@context/UserContext"
+import { useAppDispatch } from "../store"
+import { fetchJobsThunk } from "../store/slices/jobsSlice"
 import { AppSidebar } from "@components/app-sidebar"
 import { SiteHeader } from "@components/site-header"
 import { SidebarInset, SidebarProvider } from "@components/ui/sidebar"
 import { CandidateOverview } from "@components/candidate/CandidateOverview"
 import { CandidateBrowseJobs } from "@components/candidate/CandidateBrowseJobs"
+import { CandidateApplications } from "@components/candidate/CandidateApplications"
 import { CandidateSavedJobs } from "@components/candidate/CandidateSavedJobs"
 import { CandidateAssessments } from "@components/candidate/CandidateAssessments"
 import { CandidateProfile } from "@components/candidate/CandidateProfile"
 
 export default function CandidateDashboard() {
   const { profile } = useUser();
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (profile) {
+      dispatch(fetchJobsThunk());
+    }
+  }, [dispatch, profile]);
   const [searchParams] = useSearchParams();
   const urlTab = searchParams.get("tab");
-  const [activeTab, setActiveTab] = useState(urlTab || "overview");
 
   const tabTitles: Record<string, string> = {
     overview: "Overview",
     jobs: "Browse Jobs",
+    applications: "Applications",
     "saved-jobs": "Saved Jobs",
     assessments: "Assessments",
     profile: "Profile & Resume",
   };
 
-  useEffect(() => {
-    if (urlTab && tabTitles[urlTab]) {
-      setActiveTab(urlTab);
-    }
-  }, [urlTab]);
+  const activeTab = urlTab && tabTitles[urlTab] ? urlTab : "overview";
+  const navigateToTab = (tab: string) => navigate(`/dashboard?tab=${tab}`);
 
   return (
     <SidebarProvider>
-      <AppSidebar activeTab={activeTab} onSelectTab={setActiveTab} />
+      <AppSidebar activeTab={activeTab} />
       <SidebarInset className="bg-cream/40 min-h-screen">
         <SiteHeader title={tabTitles[activeTab] || "Overview"} />
 
@@ -48,10 +56,11 @@ export default function CandidateDashboard() {
             )}
           </div>
 
-          {activeTab === "overview" && <CandidateOverview onNavigateTab={setActiveTab} />}
+          {activeTab === "overview" && <CandidateOverview onNavigateTab={navigateToTab} />}
           {activeTab === "jobs" && <CandidateBrowseJobs />}
+          {activeTab === "applications" && <CandidateApplications />}
           {activeTab === "saved-jobs" && <CandidateSavedJobs />}
-          {activeTab === "assessments" && <CandidateAssessments onStartAssessment={() => {}} />}
+          {activeTab === "assessments" && <CandidateAssessments />}
           {activeTab === "profile" && <CandidateProfile />}
         </div>
       </SidebarInset>

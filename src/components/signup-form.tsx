@@ -2,12 +2,10 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { useAuth0 } from "@auth0/auth0-react"
 import { AlertCircle, Loader2, ArrowRight } from "lucide-react"
-import { useUser } from "@context/UserContext"
 import { SocialAuthDivider, GoogleAuthButton } from "@components/social-auth-button"
 
 export function SignupForm() {
-  const { refreshUser } = useUser();
-  const { loginWithPopup, isLoading } = useAuth0();
+  const { loginWithPopup, isLoading, isAuthenticated } = useAuth0();
   const [authLoading, setAuthLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [role, setRole] = useState<"candidate" | "recruiter">("candidate");
@@ -20,6 +18,9 @@ export function SignupForm() {
     try {
       setAuthLoading(true);
       setErrorMsg("");
+      if (typeof window !== "undefined") {
+        localStorage.setItem("smarthire_signup_role", role);
+      }
 
       await loginWithPopup({
         authorizationParams: {
@@ -28,8 +29,6 @@ export function SignupForm() {
           ...(connection ? { connection } : {}),
         },
       });
-
-      refreshUser();
     } catch (err: unknown) {
       const authError = err as { error?: string; message?: string; error_description?: string };
       if (authError?.error !== "cancelled") {
@@ -40,7 +39,16 @@ export function SignupForm() {
     }
   };
 
-  const busy = isLoading || authLoading;
+  const busy = isLoading || authLoading || isAuthenticated;
+
+  if (isAuthenticated) {
+    return (
+      <div className="w-full max-w-md flex flex-col items-center justify-center p-8 space-y-4">
+        <Loader2 className="size-6 animate-spin text-terracotta" />
+        <p className="text-xs font-medium text-[#78716C]">Setting up your account...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-md">

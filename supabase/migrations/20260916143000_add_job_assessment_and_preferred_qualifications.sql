@@ -1,0 +1,3 @@
+ALTER TABLE jobs
+    ADD COLUMN IF NOT EXISTS require_assessment BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS preferred_qualifications JSONB NOT NULL DEFAULT '[]'::jsonb;

@@ -1,49 +1,70 @@
 # SmartHire
 
-SmartHire is a modern recruitment and hiring platform designed to streamline the job discovery, candidate evaluation, and application workflow for both candidates and recruiters.
+SmartHire is an automated recruitment and hiring platform designed to streamline job discovery, candidate evaluation, screening assessments, and application workflows for both candidates and recruiters.
 
 ---
 
 ## Overview
 
-SmartHire provides dedicated role-based experiences tailored to the hiring lifecycle:
+SmartHire provides dedicated role-based experiences tailored to the modern hiring lifecycle:
 
-- **Candidates**: Discover open roles, filter opportunities by department and skills, review comprehensive job specifications, and submit structured applications.
-- **Recruiters**: Manage company job postings, define role requirements, track candidate applications across stages, and review applicant details.
+- **Candidates**: Discover open roles, filter opportunities by department and skills, review job specifications with automated candidate-job match scoring, submit structured applications, and complete online screening assessments.
+- **Recruiters**: Manage company job postings, configure matching criteria and weights, curate MCQ question banks, manage assessment lifecycles, track candidate applications across pipeline stages, and review candidate assessment results.
 
 ---
 
 ## Key Features
 
-### Authentication & Role-Based Onboarding
-- Authentication integration supporting distinct candidate and recruiter roles.
-- Role-specific onboarding workflows for candidate profile initialization and recruiter workspace setup.
-- Route protection and persistent session management across page refreshes.
+### Authentication & Role-Based Workflows
+- Auth0 authentication supporting distinct candidate and recruiter roles.
+- Role-specific onboarding workflows for candidate profile setup and recruiter company workspace creation.
+- Route protection, JWT validation, and persistent session management.
 
 ### Job Management (Recruiter)
-- Job posting creation and editing with metadata controls: title, department, employment type, location, work mode, experience level, education, salary range, deadline, and required skills.
-- Centralized job status tracking (`Active`, `Draft`, `Closed`).
-- Recruiter job details view with recruitment status distribution across application stages.
+- Create and edit job postings with comprehensive metadata: title, department, employment type, location, work mode, experience level, education, salary range, deadline, required skills, and preferred skills.
+- Configurable candidate-job matching weights for required skills, preferred skills, experience, education, work mode, and employment status.
+- Job status lifecycle management (`Active`, `Draft`, `Closed`).
 
-### Job Discovery & Application (Candidate)
-- Uniform 3-column responsive job grid with search and department filtering.
-- Information-dense job cards featuring company branding, relative posting timestamps, metadata chips, and skill requirements.
-- Unified role-aware Job Details view.
-- Multi-section Application Form covering applicant contact details, professional background, resume attachment, application questions, work eligibility, and confirmation.
+### Job Discovery & Application Submission (Candidate)
+- Responsive job listings grid with search, department filtering, and work mode filters.
+- Detailed job specification pages with role requirements and automated match score indicators.
+- Multi-section application form covering contact details, professional background, conditional current employment tracking, resume attachment, application questions, and work eligibility.
+- Automated application match evaluation with section-level score breakdowns.
 
-### Profile & Resume Management
-- Candidate profile management with personal details, date of birth, and resume document handling.
-- Recruiter company workspace management with company profile configurations.
+### Screening Assessments & Question Bank
+- Recruiter assessment configuration for MCQ screening: question duration, question count selection, and question bank curation.
+- Question management supporting single MCQ creation, editing, deletion, and bulk Excel file import.
+- Assessment lifecycle controls (`NOT_STARTED`, `CONFIGURED`, `ACTIVE`, `STARTED`, `CLOSED`) with configuration validation before activation.
+- Context-aware recruiter candidate actions: provides configuration access (`Configure Assessment`) before an assessment starts and result access (`Assessment Results`) once activated.
+- Timed candidate assessment taking interface with countdown timers, question navigation, automatic expiration submission, and result recording.
+- Recruiter assessment results view displaying candidate scores, completion status, time taken, and score percentages across applicant stages.
+
+### Candidate Evaluation & Pipeline Management (Recruiter)
+- Centralized candidate management per job opening with filtering by pipeline status (`Screening`, `Shortlisted`, `Rejected`), match score ranges, experience, and location.
+- Pipeline status transitions with structured rejection reasons.
+- In-depth candidate application review modal displaying resume, contact info, answers, skill overlap, and match analysis.
+
+### Candidate Application Tracking & Saved Jobs
+- Candidate application tracking view displaying status progression across recruitment stages.
+- Historical assessment attempt preservation across status transitions.
+- Job bookmarking for saving open positions.
 
 ---
 
 ## Tech Stack
 
-- **Frontend**: React 19, TypeScript, Vite
+### Frontend
+- **Framework**: React 19, TypeScript, Vite
 - **State Management**: Redux Toolkit
 - **Styling**: Tailwind CSS, Lucide Icons, RSuite Components
 - **Routing**: React Router 7
-- **Authentication**: Auth0
+- **Authentication**: Auth0 SPA SDK
+
+### Backend
+- **Framework**: FastAPI (Python 3.11+)
+- **ORM & Database**: SQLAlchemy, PostgreSQL (Supabase)
+- **Validation**: Pydantic v2
+- **Testing**: Pytest
 
 ---
 
@@ -51,9 +72,11 @@ SmartHire provides dedicated role-based experiences tailored to the hiring lifec
 
 ### Prerequisites
 - Node.js (v18 or higher recommended)
+- Python (v3.11 or higher recommended)
+- PostgreSQL database instance
 - npm or yarn
 
-### Installation
+### Installation & Setup
 
 1. Clone the repository:
    ```bash
@@ -61,25 +84,51 @@ SmartHire provides dedicated role-based experiences tailored to the hiring lifec
    cd smart-hire
    ```
 
-2. Install dependencies:
+2. Frontend Setup:
    ```bash
    npm install
    ```
 
-3. Configure environment variables:
-   Create a `.env` file in the project root with your Auth0 credentials:
+   Create a `.env` file in the project root:
    ```env
    VITE_AUTH0_DOMAIN=your-auth0-domain
    VITE_AUTH0_CLIENT_ID=your-auth0-client-id
    VITE_AUTH0_AUDIENCE=your-auth0-audience
+   VITE_API_URL=http://localhost:8000/api
    ```
 
-4. Start the development server:
+3. Backend Setup:
    ```bash
+   cd backend
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+   Create a `backend/.env` file:
+   ```env
+   DATABASE_URL=postgresql://user:password@localhost:5432/smarthire
+   AUTH0_DOMAIN=your-auth0-domain
+   AUTH0_API_AUDIENCE=your-auth0-audience
+   AUTH0_ISSUER=https://your-auth0-domain/
+   AUTH0_ALGORITHMS=RS256
+   ```
+
+4. Run the Development Servers:
+
+   Start the backend:
+   ```bash
+   # From the backend directory with venv activated
+   uvicorn main:app --reload --port 8000
+   ```
+
+   Start the frontend:
+   ```bash
+   # From the project root
    npm run dev
    ```
 
-5. Build for production:
+5. Build for Production:
    ```bash
    npm run build
    ```
@@ -90,21 +139,31 @@ SmartHire provides dedicated role-based experiences tailored to the hiring lifec
 
 ```
 smart-hire/
+├── backend/
+│   ├── routers/           # FastAPI API route controllers
+│   ├── services/          # Business logic and matching engine
+│   ├── tests/             # Backend test suites
+│   ├── auth.py            # JWT token validation and Auth0 integration
+│   ├── database.py        # Database connection and session management
+│   ├── main.py            # FastAPI application entrypoint
+│   ├── models.py          # SQLAlchemy database models
+│   ├── schemas.py         # Pydantic schemas and serialization
+│   └── requirements.txt   # Python dependencies
 ├── public/                # Static public assets
 ├── src/
 │   ├── components/        # Reusable UI components
-│   │   ├── candidate/     # Candidate dashboard, browse jobs, application modal
-│   │   ├── recruiter/     # Recruiter dashboard, candidate tracking, job creation modal
-│   │   ├── common/        # Shared components (JobCard, inputs, selectors)
-│   │   └── ui/            # Base UI primitives (sidebar, layout components)
+│   │   ├── candidate/     # Candidate dashboard, assessments, applications
+│   │   ├── recruiter/     # Recruiter dashboard, assessments, questions
+│   │   ├── common/        # Shared modals, cards, inputs, match review
+│   │   └── ui/            # Base UI primitives
 │   ├── context/           # User context and session state
-│   ├── data/              # Centralized mock and baseline datasets
-│   ├── hooks/             # Custom React hooks
-│   ├── pages/             # Top-level page views and route targets
-│   ├── store/             # Redux store and slices (jobsSlice)
-│   └── utils/             # Authentication synchronization and utility helpers
+│   ├── pages/             # Page views and route targets
+│   ├── store/             # Redux store and slices (jobs, applications)
+│   └── utils/             # API client, formatters, validation
+├── supabase/
+│   └── migrations/        # Database schema migrations
 ├── index.html             # HTML entry point
-├── package.json           # Dependencies and scripts
+├── package.json           # Frontend dependencies and scripts
 ├── tsconfig.json          # TypeScript configuration
 └── vite.config.js         # Vite configuration
 ```

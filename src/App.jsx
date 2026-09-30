@@ -6,43 +6,49 @@ import RecruiterOnboarding from "./pages/RecruiterOnboarding"
 import CandidateOnboarding from "./pages/CandidateOnboarding"
 import CandidateDashboard from "./pages/CandidateDashboard"
 import RecruiterDashboard from "./pages/RecruiterDashboard"
-import RecruiterJobDetails from "./pages/RecruiterJobDetails"
+import JobDetails from "./pages/JobDetails"
+import AccountProfile from "./pages/AccountProfile"
+import RecruiterCandidateProfile from "./pages/RecruiterCandidateProfile"
+import JobCandidatesPage from "./pages/JobCandidatesPage"
+import RecruiterApplicationDetailPage from "./pages/RecruiterApplicationDetailPage"
+import CandidateApplicationDetailPage from "./pages/CandidateApplicationDetailPage"
+import CandidateCompanyDetails from "./pages/CandidateCompanyDetails"
+import RecruiterQuestionBankPage from "./pages/RecruiterQuestionBankPage"
+import RecruiterAssessmentResultsPage from "./pages/RecruiterAssessmentResultsPage"
+import CandidateAssessmentPage from "./pages/CandidateAssessmentPage"
 import NotFound from "./pages/NotFound"
 import { ErrorBoundary } from "./components/error-boundary"
 import { useUser } from "./context/UserContext"
 import { useIdleTimeout } from "./hooks/useIdleTimeout"
 
+import { AuthLoadingPage } from "./components/common/AuthLoadingPage"
+
 function getHomeRoute(profile) {
-  if (!profile) return "/login";
+  const hasToken = typeof window !== "undefined" && Boolean(localStorage.getItem("smarthire_token"));
+  if (!profile || !hasToken) return "/login";
   if (profile.onboardingCompleted) return "/dashboard";
   return profile.role === "recruiter" ? "/recruiter-onboarding" : "/candidate-onboarding";
 }
 
 function PublicRoute({ children }) {
-  const { isLoading } = useAuth0();
-  const { profile } = useUser();
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center">
-        <div className="size-6 border-2 border-terracotta border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+  const { isLoading, isAuthenticated } = useAuth0();
+  const { profile, isLoading: isProfileLoading } = useUser();
+  if (isLoading || isProfileLoading || isAuthenticated) {
+    const hasToken = typeof window !== "undefined" && Boolean(localStorage.getItem("smarthire_token"));
+    if (profile && hasToken) return <Navigate to={getHomeRoute(profile)} replace />;
+    return <AuthLoadingPage />;
   }
-  if (profile) return <Navigate to={getHomeRoute(profile)} replace />;
   return children;
 }
 
 function ProtectedRoute({ children, requireOnboarding = true, targetRole }) {
   const { isLoading } = useAuth0();
-  const { profile } = useUser();
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center">
-        <div className="size-6 border-2 border-terracotta border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+  const { profile, isLoading: isProfileLoading } = useUser();
+  if (isLoading || isProfileLoading) {
+    return <AuthLoadingPage />;
   }
-  if (!profile) return <Navigate to="/login" replace />;
+  const hasToken = typeof window !== "undefined" && Boolean(localStorage.getItem("smarthire_token"));
+  if (!profile || !hasToken) return <Navigate to="/login" replace />;
 
   if (requireOnboarding && !profile.onboardingCompleted) {
     return <Navigate to={getHomeRoute(profile)} replace />;
@@ -93,21 +99,28 @@ function App() {
           <Route path="/recruiter/jobs/:jobId"
             element={
               <ProtectedRoute>
-                <RecruiterJobDetails />
+                <JobDetails />
               </ProtectedRoute>
             }
           />
           <Route path="/candidate/jobs/:jobId"
             element={
               <ProtectedRoute>
-                <RecruiterJobDetails />
+                <JobDetails />
               </ProtectedRoute>
             }
           />
           <Route path="/jobs/:jobId"
             element={
               <ProtectedRoute>
-                <RecruiterJobDetails />
+                <JobDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/company/:companyId"
+            element={
+              <ProtectedRoute>
+                <CandidateCompanyDetails />
               </ProtectedRoute>
             }
           />
@@ -116,17 +129,122 @@ function App() {
           <Route path="/recruiter/dashboard" element={<Navigate to="/dashboard?tab=overview" replace />} />
           <Route path="/recruiter/jobs" element={<Navigate to="/dashboard?tab=postings" replace />} />
           <Route path="/recruiter/candidates" element={<Navigate to="/dashboard?tab=candidates" replace />} />
-          <Route path="/recruiter/candidates/:candidateId" element={<Navigate to="/dashboard?tab=candidates" replace />} />
+          <Route
+            path="/recruiter/candidates/:candidateId"
+            element={
+              <ProtectedRoute targetRole="recruiter">
+                <RecruiterCandidateProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/candidates/job/:jobId"
+            element={
+              <ProtectedRoute targetRole="recruiter">
+                <JobCandidatesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/candidates/job/:jobId/application/:applicationId"
+            element={
+              <ProtectedRoute targetRole="recruiter">
+                <RecruiterApplicationDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recruiter/jobs/:jobId/questions"
+            element={
+              <ProtectedRoute targetRole="recruiter">
+                <RecruiterQuestionBankPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/jobs/:jobId/questions"
+            element={
+              <ProtectedRoute targetRole="recruiter">
+                <RecruiterQuestionBankPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recruiter/jobs/:jobId/assessment"
+            element={
+              <ProtectedRoute targetRole="recruiter">
+                <RecruiterQuestionBankPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recruiter/jobs/:jobId/assessment/results"
+            element={
+              <ProtectedRoute targetRole="recruiter">
+                <RecruiterAssessmentResultsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/jobs/:jobId/assessment/results"
+            element={
+              <ProtectedRoute targetRole="recruiter">
+                <RecruiterAssessmentResultsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/recruiter/assessments" element={<Navigate to="/dashboard?tab=assessments" replace />} />
           <Route path="/recruiter/company" element={<Navigate to="/dashboard?tab=company" replace />} />
           <Route path="/candidate" element={<Navigate to="/dashboard?tab=overview" replace />} />
           <Route path="/candidate/overview" element={<Navigate to="/dashboard?tab=overview" replace />} />
           <Route path="/candidate/dashboard" element={<Navigate to="/dashboard?tab=overview" replace />} />
           <Route path="/candidate/jobs" element={<Navigate to="/dashboard?tab=jobs" replace />} />
-          <Route path="/candidate/applications" element={<Navigate to="/dashboard?tab=overview" replace />} />
+          <Route
+            path="/candidate/applications/:applicationId"
+            element={
+              <ProtectedRoute targetRole="candidate">
+                <CandidateApplicationDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/candidate/jobs/:jobId/application/:applicationId"
+            element={
+              <ProtectedRoute targetRole="candidate">
+                <CandidateApplicationDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/candidate/jobs/:jobId/assessment"
+            element={
+              <ProtectedRoute targetRole="candidate">
+                <CandidateAssessmentPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/candidate/assessment-attempts/:attemptId"
+            element={
+              <ProtectedRoute targetRole="candidate">
+                <CandidateAssessmentPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/candidate/applications" element={<Navigate to="/dashboard?tab=applications" replace />} />
           <Route path="/candidate/saved-jobs" element={<Navigate to="/dashboard?tab=saved-jobs" replace />} />
           <Route path="/candidate/assessments" element={<Navigate to="/dashboard?tab=assessments" replace />} />
           <Route path="/candidate/profile" element={<Navigate to="/dashboard?tab=profile" replace />} />
+          <Route path="/account"
+            element={
+              <ProtectedRoute>
+                <AccountProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/account-profile" element={<Navigate to="/account" replace />} />
+          <Route path="/candidate/account" element={<Navigate to="/account" replace />} />
+          <Route path="/recruiter/account" element={<Navigate to="/account" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
@@ -135,4 +253,3 @@ function App() {
 }
 
 export default App;
-

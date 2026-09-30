@@ -1,21 +1,23 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Search } from "lucide-react"
-import { useAppSelector } from "../../store"
-import { type Job } from "../../store/slices/jobsSlice"
+import { useAppDispatch, useAppSelector } from "../../store"
+import { fetchRecruiterJobsThunk } from "../../store/slices/jobsSlice"
+import { useUser } from "../../context/UserContext"
 import { JobCard } from "../common/JobCard"
+import { RecruiterPostingsSkeleton } from "../skeletons/RecruiterPostingsSkeleton"
 
-interface RecruiterPostingsProps {
-  companyName: string;
-  onNavigateTab: (tab: string) => void;
-  jobs?: Job[];
-  onOpenCreateJob?: () => void;
-}
+export function RecruiterPostings() {
+  const dispatch = useAppDispatch();
+  const { profile, isLoading: isUserLoading } = useUser();
+  const jobs = useAppSelector((state) => state.jobs.recruiterJobs);
+  const isJobsLoading = useAppSelector((state) => state.jobs.isRecruiterLoading);
+  const hasFetched = useAppSelector((state) => state.jobs.hasFetchedRecruiterJobs);
 
-export function RecruiterPostings({
-  jobs: propJobs,
-}: RecruiterPostingsProps) {
-  const storeJobs = useAppSelector((state) => state.jobs.jobs);
-  const jobs = propJobs || storeJobs;
+  useEffect(() => {
+    if (!isUserLoading && profile?.role === "recruiter") {
+      dispatch(fetchRecruiterJobsThunk());
+    }
+  }, [dispatch, isUserLoading, profile?.role]);
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -24,6 +26,12 @@ export function RecruiterPostings({
     job.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
     job.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  const isInitialLoading = isUserLoading || isJobsLoading || !hasFetched;
+
+  if (isInitialLoading) {
+    return <RecruiterPostingsSkeleton />;
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6 w-full min-w-0 max-w-full overflow-hidden">
@@ -40,11 +48,20 @@ export function RecruiterPostings({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-start">
-        {filteredJobs.map((job) => (
-          <JobCard key={job.id} job={job} />
-        ))}
-      </div>
+      {filteredJobs.length === 0 ? (
+        <div className="rounded-2xl border-2 border-dashed border-[#E6E0D6] bg-white p-12 text-center">
+          <h3 className="font-serif text-base font-bold text-charcoal">No Job Postings Found</h3>
+          <p className="text-xs text-[#8E877D] mt-1 max-w-sm mx-auto">
+            {searchQuery ? "No job postings matched your search criteria." : "You haven't posted any jobs yet. Create a new job to start hiring."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-start">
+          {filteredJobs.map((job) => (
+            <JobCard key={job.id} job={job} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

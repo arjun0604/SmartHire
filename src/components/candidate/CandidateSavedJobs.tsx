@@ -1,10 +1,11 @@
 import { Bookmark } from "lucide-react"
+import { useUser } from "../../context/UserContext"
 import { useAppSelector } from "../../store"
 import { JobCard } from "../common/JobCard"
 
 export function CandidateSavedJobs() {
+  const { savedJobIds } = useUser();
   const jobs = useAppSelector((state) => state.jobs.jobs);
-  const savedJobIds = useAppSelector((state) => state.jobs.savedJobIds);
 
   const savedJobs = jobs.filter((job) => savedJobIds.includes(job.id));
 
@@ -19,7 +20,7 @@ export function CandidateSavedJobs() {
             Jobs you've saved to review, research, or apply for later.
           </p>
         </div>
-        <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#FAF8F5] border border-[#E6E0D6] text-charcoal flex items-center gap-1.5 self-start sm:self-auto shrink-0">
+        <span className="px-3 py-1 rounded-full text-xs font-medium bg-cream border border-[#E6E0D6] text-charcoal flex items-center gap-1.5 self-start sm:self-auto shrink-0">
           <Bookmark className="size-3.5 text-terracotta fill-terracotta" />
           <span>{savedJobs.length} Saved</span>
         </span>
@@ -39,6 +40,7 @@ export function CandidateSavedJobs() {
             <JobCard
               key={job.id}
               job={job}
+              fromContext="saved-jobs"
             />
           ))}
         </div>

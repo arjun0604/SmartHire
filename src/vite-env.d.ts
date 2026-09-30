@@ -1,4 +1,4 @@
-/// <reference types="vite/client" />
+import "vite/client"
 
 interface ImportMetaEnv {
   readonly VITE_AUTH0_DOMAIN: string

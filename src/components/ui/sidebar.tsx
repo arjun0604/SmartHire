@@ -27,7 +27,7 @@ function Sidebar({
   return (
     <aside
       className={cn(
-        "flex flex-col shrink-0 h-screen sticky top-0 bg-cream z-30",
+        "fixed inset-y-0 left-0 flex flex-col shrink-0 h-screen bg-cream z-30",
         className
       )}
       {...props}
@@ -68,7 +68,7 @@ function SidebarInset({
 }: React.ComponentProps<"main">) {
   return (
     <main
-      className={cn("flex-1 min-w-0 max-w-full flex flex-col overflow-x-hidden", className)}
+      className={cn("flex-1 min-w-0 max-w-full flex flex-col overflow-x-hidden ml-14 sm:ml-16 lg:ml-20", className)}
       {...props}
     >
       {children}
