@@ -10,8 +10,7 @@ import {
   Phone,
   MapPin,
 } from "lucide-react"
-import { formatDisplayDate } from "@utils/formatters"
-import { fetchCandidateResumeApi, API_BASE_URL, type ResumeBackendResponse, type ParsedSkill } from "@utils/api"
+import { fetchCandidateResumeApi, getResumeViewUrl, type ResumeBackendResponse, type ParsedSkill } from "@utils/api"
 import { ProfessionalProfileSkeleton } from "@components/skeletons/ProfessionalProfileSkeleton"
 
 export function CandidateProfile() {
@@ -271,28 +270,6 @@ export function CandidateProfile() {
     return () => window.removeEventListener("resize", updateIndex);
   }, [selectedSkill, rawSkills]);
 
-  const getResumeViewUrl = (url?: string | null): string => {
-    const backendBase = API_BASE_URL.replace(/\/api\/?$/, "");
-    if (!url) {
-      const storagePath = resumeData?.parsed_details?.storage_path;
-      if (storagePath) {
-        return `${backendBase}/api/storage/resumes/${storagePath}`;
-      }
-      return "";
-    }
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-      return url;
-    }
-    if (url.startsWith("/api/storage/")) {
-      return `${backendBase}${url}`;
-    }
-    const storagePath = resumeData?.parsed_details?.storage_path;
-    if (storagePath) {
-      return `${backendBase}/api/storage/resumes/${storagePath}`;
-    }
-    return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
-  };
-
   const formatFileSize = (bytes?: number): string => {
     if (!bytes || bytes <= 0) return "";
     if (bytes < 1024) return `${bytes} B`;
@@ -468,7 +445,7 @@ export function CandidateProfile() {
 
               {(resumeData?.file_url || resumeData?.parsed_details?.storage_path || profile?.resumeUrl) && (
                 <a
-                  href={getResumeViewUrl(resumeData?.file_url || profile?.resumeUrl)}
+                  href={getResumeViewUrl(resumeData?.file_url || profile?.resumeUrl, resumeData?.parsed_details?.storage_path as string | undefined) || "#"}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs font-medium text-charcoal hover:text-terracotta transition-colors"

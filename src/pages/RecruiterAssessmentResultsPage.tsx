@@ -193,7 +193,7 @@ export default function RecruiterAssessmentResultsPage() {
       started,
       completed,
       notStarted,
-      averageScoreDisplay: hasAvg ? `${avg % 1 === 0 ? avg.toFixed(0) : avg}%` : "—",
+      averageScoreDisplay: hasAvg ? `${avg % 1 === 0 ? avg.toFixed(0) : avg}` : "—",
       completionRateDisplay: hasCompRate ? `${compRate % 1 === 0 ? compRate.toFixed(0) : compRate}%` : (totalEligible > 0 ? "0%" : "—"),
     };
   }, [data]);

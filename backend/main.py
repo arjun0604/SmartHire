@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from fastapi import FastAPI, Request
@@ -26,15 +27,15 @@ app = FastAPI(
     version="0.1.0",
 )
 
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://arjun0604.github.io",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-    ],
-    allow_origin_regex=r"https?://.*",
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,16 +44,19 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    origin = request.headers.get("origin") or "*"
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc) or "Internal server error"},
-        headers={
+    origin = request.headers.get("origin")
+    cors_headers = {}
+    if origin and origin in origins:
+        cors_headers = {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
             "Access-Control-Allow-Methods": "*",
             "Access-Control-Allow-Headers": "*",
-        },
+        }
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc) or "Internal server error"},
+        headers=cors_headers,
     )
 
 storage_dir = Path(__file__).resolve().parent / "storage"

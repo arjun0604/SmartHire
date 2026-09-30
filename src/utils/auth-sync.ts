@@ -194,3 +194,21 @@ export async function syncRecruiterOnboardingToBackend(
     dbUser
   );
 }
+
+export function getLogoutReturnToUrl(params?: Record<string, string>): string {
+  if (typeof window === "undefined") return "/login";
+  const base = new URL(import.meta.env.BASE_URL, window.location.origin);
+  const target = new URL("login", base);
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      target.searchParams.set(key, value);
+    });
+  }
+  return target.href;
+}
+
+export function getLoginPath(): string {
+  if (typeof window === "undefined") return "/login";
+  return new URL("login", new URL(import.meta.env.BASE_URL, window.location.origin)).pathname;
+}
+

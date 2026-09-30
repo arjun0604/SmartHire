@@ -1,18 +1,38 @@
 import axios from "axios"
 import type { Job } from "../data/jobs"
 
-function resolveApiBaseUrl(): string {
-  if (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL) {
-    const raw = String(import.meta.env.VITE_API_BASE_URL).trim();
-    return raw.endsWith("/api") ? raw : `${raw.replace(/\/+$/, "")}/api`;
-  }
-  if (typeof window !== "undefined" && window.location?.hostname) {
-    return `${window.location.protocol}//${window.location.hostname}:8000/api`;
-  }
-  return "http://localhost:8000/api";
-}
+const rawApiUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || "";
+export const API_BASE_URL = rawApiUrl
+  ? (rawApiUrl.endsWith("/api") ? rawApiUrl : `${rawApiUrl.replace(/\/+$/, "")}/api`)
+  : "";
 
-export const API_BASE_URL = resolveApiBaseUrl();
+export function getBackendUrl(path?: string | null): string {
+  if (!path) return "";
+  const trimmed = path.trim();
+  if (!trimmed) return "";
+
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("blob:")
+  ) {
+    return trimmed;
+  }
+
+  const backendBase = API_BASE_URL ? API_BASE_URL.replace(/\/api\/?$/, "") : "";
+  if (!backendBase) return trimmed;
+
+  if (trimmed.startsWith("/api/")) {
+    return `${backendBase}${trimmed}`;
+  }
+  if (trimmed.startsWith("api/")) {
+    return `${backendBase}/${trimmed}`;
+  }
+
+  const cleanPath = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
+  return `${backendBase}/api/${cleanPath}`;
+}
 
 const initialToken = typeof window !== "undefined" ? localStorage.getItem("smarthire_token") : null;
 
@@ -51,34 +71,6 @@ export function clearAuthSession() {
     delete apiClient.defaults.headers.common["Authorization"];
   }
 }
-
-type AuthFailureHandler = () => void;
-let authFailureHandler: AuthFailureHandler | null = null;
-
-export function registerAuthFailureHandler(handler: AuthFailureHandler) {
-  authFailureHandler = handler;
-  return () => {
-    if (authFailureHandler === handler) {
-      authFailureHandler = null;
-    }
-  };
-}
-
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      clearAuthSession();
-      if (authFailureHandler) {
-        authFailureHandler();
-      }
-      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-        window.location.href = "/login";
-      }
-    }
-    return Promise.reject(error);
-  }
-);
 
 export function setAuthToken(token: string | null) {
   if (token) {
@@ -141,14 +133,23 @@ export interface AccountUpdatePayload {
   picture_url?: string | null;
 }
 
+function normalizeUser(user: UserBackendResponse): UserBackendResponse {
+  if (!user) return user;
+  return {
+    ...user,
+    picture_url: user.picture_url ? getBackendUrl(user.picture_url) : user.picture_url,
+    resume_url: user.resume_url ? getBackendUrl(user.resume_url) : user.resume_url,
+  };
+}
+
 export async function syncUserWithBackend(payload: UserSyncPayload): Promise<UserBackendResponse> {
   const response = await apiClient.post<UserBackendResponse>("/auth/sync", payload);
-  return response.data;
+  return normalizeUser(response.data);
 }
 
 export async function updateAccountProfileApi(payload: AccountUpdatePayload): Promise<UserBackendResponse> {
   const response = await apiClient.put<UserBackendResponse>("/auth/account", payload);
-  return response.data;
+  return normalizeUser(response.data);
 }
 
 export async function uploadProfilePhotoApi(auth0Id: string, file: File): Promise<{ picture_url: string }> {
@@ -160,7 +161,9 @@ export async function uploadProfilePhotoApi(auth0Id: string, file: File): Promis
       "Content-Type": "multipart/form-data",
     },
   });
-  return response.data;
+  return {
+    picture_url: getBackendUrl(response.data.picture_url),
+  };
 }
 
 export async function removeProfilePhotoApi(auth0Id: string): Promise<void> {
@@ -200,14 +203,31 @@ export interface CompanyDetails {
   active_jobs?: CandidateCompanyJob[];
 }
 
+function normalizeCompany(company: CompanyDetails): CompanyDetails {
+  if (!company) return company;
+  return {
+    ...company,
+    logo_url: company.logo_url ? getBackendUrl(company.logo_url) : company.logo_url,
+  };
+}
+
+function normalizeJob(job: Job): Job {
+  if (!job) return job;
+  const rawLogo = job.companyLogo || (job as any).company_logo;
+  return {
+    ...job,
+    companyLogo: rawLogo ? getBackendUrl(rawLogo) : job.companyLogo,
+  };
+}
+
 export async function fetchMyCompanyApi(): Promise<CompanyDetails> {
   const response = await apiClient.get<CompanyDetails>("/companies/my");
-  return response.data;
+  return normalizeCompany(response.data);
 }
 
 export async function updateMyCompanyApi(payload: Partial<CompanyDetails>): Promise<CompanyDetails> {
   const response = await apiClient.put<CompanyDetails>("/companies/my", payload);
-  return response.data;
+  return normalizeCompany(response.data);
 }
 
 export async function uploadCompanyLogoApi(file: File): Promise<{ logo_url: string }> {
@@ -218,27 +238,29 @@ export async function uploadCompanyLogoApi(file: File): Promise<{ logo_url: stri
       "Content-Type": "multipart/form-data",
     },
   });
-  return response.data;
+  return {
+    logo_url: getBackendUrl(response.data.logo_url),
+  };
 }
 
 export async function fetchCompanyByIdApi(companyId: string): Promise<CompanyDetails> {
   const response = await apiClient.get<CompanyDetails>(`/companies/${companyId}`);
-  return response.data;
+  return normalizeCompany(response.data);
 }
 
 export async function fetchJobsApi(params?: { status?: string }): Promise<Job[]> {
   const response = await apiClient.get<Job[]>("/jobs", { params });
-  return response.data;
+  return (response.data || []).map(normalizeJob);
 }
 
 export async function fetchRecruiterJobsApi(params?: { status?: string }): Promise<Job[]> {
   const response = await apiClient.get<Job[]>("/jobs/recruiter", { params });
-  return response.data;
+  return (response.data || []).map(normalizeJob);
 }
 
 export async function fetchJobByIdApi(jobId: string): Promise<Job> {
   const response = await apiClient.get<Job>(`/jobs/${jobId}`);
-  return response.data;
+  return normalizeJob(response.data);
 }
 
 function toNumericSalary(val: unknown): number | null {
@@ -278,7 +300,7 @@ export async function createJobApi(jobData: Partial<Job>): Promise<Job> {
     },
     additional_requirements: jobData.additional_requirements || jobData.additionalRequirements || null,
   });
-  return response.data;
+  return normalizeJob(response.data);
 }
 
 export async function updateJobApi(jobId: string, jobData: Partial<Job>): Promise<Job> {
@@ -326,7 +348,7 @@ export async function updateJobApi(jobId: string, jobData: Partial<Job>): Promis
   }
 
   const response = await apiClient.put<Job>(`/jobs/${jobId}`, payload);
-  return response.data;
+  return normalizeJob(response.data);
 }
 
 export async function deleteJobApi(jobId: string): Promise<void> {
@@ -408,35 +430,42 @@ export interface ApplicationCreatePayload {
   additional_information?: string | null;
 }
 
+function normalizeApplication(app: Application): Application {
+  if (!app) return app;
+  return {
+    ...app,
+    resume_url: app.resume_url ? getBackendUrl(app.resume_url) : app.resume_url,
+  };
+}
+
 export async function createApplicationApi(payload: ApplicationCreatePayload): Promise<Application> {
   const response = await apiClient.post<Application>("/applications", payload);
-  return response.data;
+  return normalizeApplication(response.data);
 }
 
 export async function fetchCandidateApplicationsApi(candidateId: string): Promise<Application[]> {
   const response = await apiClient.get<Application[]>(`/applications/candidate/${candidateId}`);
-  return response.data;
+  return (response.data || []).map(normalizeApplication);
 }
 
 export async function fetchJobApplicationsApi(jobId: string): Promise<Application[]> {
   const response = await apiClient.get<Application[]>(`/applications/job/${jobId}`);
-  return response.data;
+  return (response.data || []).map(normalizeApplication);
 }
 
 export async function fetchRecruiterApplicationsApi(): Promise<Application[]> {
   const response = await apiClient.get<Application[]>("/applications/recruiter");
-  return response.data;
+  return (response.data || []).map(normalizeApplication);
 }
 
 export async function fetchApplicationByIdApi(applicationId: string): Promise<Application> {
   const response = await apiClient.get<Application>(`/applications/${applicationId}`);
-  return response.data;
+  return normalizeApplication(response.data);
 }
-
 
 export async function updateApplicationStatusApi(applicationId: string, status: string, reason?: string | null): Promise<Application> {
   const response = await apiClient.patch<Application>(`/applications/${applicationId}/status`, { status, reason });
-  return response.data;
+  return normalizeApplication(response.data);
 }
 
 export interface StatusActionConfig {
@@ -542,6 +571,14 @@ export interface ResumeBackendResponse {
   is_baseline?: boolean;
 }
 
+function normalizeResume(resume: ResumeBackendResponse): ResumeBackendResponse {
+  if (!resume) return resume;
+  return {
+    ...resume,
+    file_url: resume.file_url ? getBackendUrl(resume.file_url) : resume.file_url,
+  };
+}
+
 export async function uploadResumeApi(candidateId: string, file: File): Promise<ResumeBackendResponse> {
   const formData = new FormData();
   formData.append("candidate_id", candidateId);
@@ -552,13 +589,13 @@ export async function uploadResumeApi(candidateId: string, file: File): Promise<
     },
     timeout: 45000,
   });
-  return response.data;
+  return normalizeResume(response.data);
 }
 
 export async function fetchCandidateResumeApi(candidateId: string): Promise<ResumeBackendResponse | null> {
   try {
     const response = await apiClient.get<ResumeBackendResponse>(`/resumes/candidate/${candidateId}`);
-    return response.data;
+    return response.data ? normalizeResume(response.data) : null;
   } catch (error: any) {
     if (error?.response?.status === 404) {
       return null;
@@ -570,7 +607,7 @@ export async function fetchCandidateResumeApi(candidateId: string): Promise<Resu
 export async function fetchResumeByIdApi(resumeId: string): Promise<ResumeBackendResponse | null> {
   try {
     const response = await apiClient.get<ResumeBackendResponse>(`/resumes/${resumeId}`);
-    return response.data;
+    return response.data ? normalizeResume(response.data) : null;
   } catch (error: any) {
     if (error?.response?.status === 404) {
       return null;
@@ -598,33 +635,25 @@ export interface CandidateDetails {
 
 export async function fetchCandidateDetailsApi(candidateId: string): Promise<CandidateDetails> {
   const response = await apiClient.get<CandidateDetails>(`/candidates/${candidateId}`);
-  return response.data;
+  const data = response.data;
+  if (data?.resume?.file_url) {
+    data.resume.file_url = getBackendUrl(data.resume.file_url);
+  }
+  return data;
 }
 
 export function getResumeViewUrl(fileUrl?: string | null, storagePath?: string | null): string | null {
-  if (fileUrl && (fileUrl.startsWith("http://") || fileUrl.startsWith("https://"))) {
-    return fileUrl;
-  }
-  const backendBase = API_BASE_URL.replace(/\/api\/?$/, "");
   if (storagePath) {
-    return `${backendBase}/api/storage/resumes/${storagePath}`;
+    return getBackendUrl(`/api/storage/resumes/${storagePath}`);
   }
   if (fileUrl) {
-    if (fileUrl.startsWith("/api/storage/")) {
-      return `${backendBase}${fileUrl}`;
-    }
-    return `${backendBase}${fileUrl.startsWith("/") ? "" : "/"}${fileUrl}`;
+    return getBackendUrl(fileUrl);
   }
   return null;
 }
 
 export function getAvatarUrl(url?: string | null): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
-    return url;
-  }
-  const backendBase = API_BASE_URL.replace(/\/api\/?$/, "");
-  return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
+  return getBackendUrl(url);
 }
 
 export interface MatchReport {

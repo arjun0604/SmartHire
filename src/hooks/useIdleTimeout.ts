@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useUser } from "../context/UserContext";
+import { getLogoutReturnToUrl } from "../utils/auth-sync";
 
 interface IdleTimeoutOptions {
   timeoutSeconds?: number;
@@ -24,9 +25,13 @@ export function useIdleTimeout({
       onIdle();
     }
 
+    const returnTo = getLogoutReturnToUrl({ reason: "inactivity" });
+    const targetUrl = new URL(returnTo);
+    window.history.replaceState(null, "", targetUrl.pathname + targetUrl.search);
+
     logout({
       logoutParams: {
-        returnTo: `${window.location.origin}/login?reason=inactivity`,
+        returnTo,
       },
     });
   }, [isAuthenticated, logout, clearSession, onIdle]);

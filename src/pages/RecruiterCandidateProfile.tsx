@@ -14,7 +14,7 @@ import { AppSidebar } from "../components/app-sidebar"
 import { SidebarInset, SidebarProvider } from "../components/ui/sidebar"
 import { SiteHeader } from "../components/site-header"
 import {
-  API_BASE_URL,
+  getResumeViewUrl,
   fetchCandidateDetailsApi,
   type CandidateDetails,
   type ParsedSkill,
@@ -202,28 +202,6 @@ export default function RecruiterCandidateProfile() {
     return () => window.removeEventListener("resize", updateIndex);
   }, [selectedSkill, rawSkills]);
 
-  const getResumeViewUrl = (url?: string | null): string => {
-    const backendBase = API_BASE_URL.replace(/\/api\/?$/, "");
-    if (!url) {
-      const storagePath = candidate?.resume?.parsed_details?.storage_path;
-      if (storagePath) {
-        return `${backendBase}/api/storage/resumes/${storagePath}`;
-      }
-      return "";
-    }
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-      return url;
-    }
-    if (url.startsWith("/api/storage/")) {
-      return `${backendBase}${url}`;
-    }
-    const storagePath = candidate?.resume?.parsed_details?.storage_path;
-    if (storagePath) {
-      return `${backendBase}/api/storage/resumes/${storagePath}`;
-    }
-    return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
-  };
-
   const formatFileSize = (bytes?: number): string => {
     if (!bytes || bytes <= 0) return "";
     if (bytes < 1024) return `${bytes} B`;
@@ -240,7 +218,10 @@ export default function RecruiterCandidateProfile() {
     return dobStr;
   };
 
-  const resumeViewUrl = getResumeViewUrl(candidate?.resume?.file_url);
+  const resumeViewUrl = getResumeViewUrl(
+    candidate?.resume?.file_url,
+    candidate?.resume?.parsed_details?.storage_path as string | undefined
+  );
 
   const hasLeftContent = Boolean(
     summary ||

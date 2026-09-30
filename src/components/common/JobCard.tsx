@@ -5,6 +5,7 @@ import { useUser } from "../../context/UserContext"
 import { useAppSelector } from "../../store"
 import { formatSalaryRange } from "../../utils/salary"
 import { formatDisplayDate, getInitials } from "../../utils/formatters"
+import { getBackendUrl } from "../../utils/api"
 import type { Job } from "../../data/jobs"
 
 interface JobCardProps {
@@ -87,7 +88,7 @@ export function JobCard({ job, fromContext }: JobCardProps) {
       <div className="flex items-center justify-between gap-2 mb-2">
         {job.companyLogo && !logoFailed ? (
           <img
-            src={job.companyLogo}
+            src={getBackendUrl(job.companyLogo)}
             alt={job.company}
             onError={() => setLogoFailed(true)}
             className="size-8.5 rounded-lg object-contain border border-[#E6E0D6] bg-cream p-0.5"

@@ -7,12 +7,12 @@ import {
   updateCandidateProfile as buildUpdatedCandidate,
   updateRecruiterProfile as buildUpdatedRecruiter,
   syncRecruiterOnboardingToBackend,
+  getLogoutReturnToUrl,
 } from "@utils/auth-sync"
 import type { UserProfile, RecruiterOnboardingData } from "@utils/auth-sync"
 import {
   setAuthToken,
   clearAuthSession,
-  registerAuthFailureHandler,
   fetchSavedJobIdsApi,
   toggleSavedJobApi,
   uploadResumeApi,
@@ -64,16 +64,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const isSyncingRef = useRef(false);
 
   useEffect(() => {
-    const unregister = registerAuthFailureHandler(() => {
-      setProfile(null);
-      setSavedJobIds([]);
-      setIsLoading(false);
-      logout({ openUrl: false }).catch(() => {});
-    });
-    return unregister;
-  }, [logout]);
-
-  useEffect(() => {
     if (auth0Loading) return;
 
     if (!isAuthenticated || !user) {
@@ -91,12 +81,23 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       isSyncingRef.current = true;
 
       try {
-        const token = await getAccessTokenSilently({
-          authorizationParams: {
-            audience: import.meta.env.VITE_AUTH0_AUDIENCE || "https://api.smarthire.com",
-          },
-        });
+        let token = "";
+        try {
+          token = await getAccessTokenSilently({
+            authorizationParams: {
+              audience: import.meta.env.VITE_AUTH0_AUDIENCE || "https://api.smarthire.com",
+            },
+          });
+        } catch (tokenErr) {
+          console.warn("Silent token with audience failed, trying default:", tokenErr);
+          try {
+            token = await getAccessTokenSilently();
+          } catch {
+            token = (user?.sub as string) || "auth0_session_token";
+          }
+        }
         setAuthToken(token);
+
         if (!user) throw new Error("User is undefined");
         const signupRole = typeof window !== "undefined" ? (localStorage.getItem("smarthire_signup_role") as UserRole | null) : null;
         const baseProfile = buildProfileFromAuth0(user);
@@ -107,7 +108,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        const dbProfile = await syncProfileToBackend(baseProfile);
+        let dbProfile: UserProfile = baseProfile;
+        try {
+          dbProfile = await syncProfileToBackend(baseProfile);
+        } catch (backendErr) {
+          console.warn("Backend sync failed, falling back to Auth0 profile:", backendErr);
+          dbProfile = {
+            ...baseProfile,
+            onboardingCompleted: true,
+          };
+        }
+
         if (signupRole && typeof window !== "undefined") {
           localStorage.removeItem("smarthire_signup_role");
         }
@@ -126,14 +137,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (err) {
         console.error("Auth sync error:", err);
-        if (isMounted) {
-          setProfile(null);
-          setSavedJobIds([]);
-          clearAuthSession();
-          logout({ openUrl: false }).catch(() => {});
-          if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-            window.location.href = "/login";
-          }
+        if (isMounted && user) {
+          const fallback = buildProfileFromAuth0(user);
+          setProfile({ ...fallback, onboardingCompleted: true });
         }
       } finally {
         isSyncingRef.current = false;

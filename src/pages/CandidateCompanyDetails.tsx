@@ -15,7 +15,7 @@ import { SidebarProvider, SidebarInset } from "../components/ui/sidebar"
 import { AppSidebar } from "../components/app-sidebar"
 import { SiteHeader } from "../components/site-header"
 import { useUser } from "../context/UserContext"
-import { fetchCompanyByIdApi, type CompanyDetails } from "../utils/api"
+import { fetchCompanyByIdApi, getBackendUrl, type CompanyDetails } from "../utils/api"
 import { getInitials } from "../utils/formatters"
 
 export default function CandidateCompanyDetails() {
@@ -133,7 +133,7 @@ export default function CandidateCompanyDetails() {
                 <div className="flex items-start gap-4">
                   {company.logo_url && !logoLoadFailed ? (
                     <img
-                      src={company.logo_url}
+                      src={getBackendUrl(company.logo_url)}
                       alt={company.name}
                       onError={() => setLogoLoadFailed(true)}
                       className="size-16 sm:size-20 rounded-2xl border border-[#E6E0D6] bg-cream object-contain p-1 shrink-0"

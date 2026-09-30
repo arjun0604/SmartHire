@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cn } from "@utils/cn"
+import { getBackendUrl } from "@utils/api"
 
 function Avatar({
   className,
@@ -22,11 +23,17 @@ function Avatar({
 function AvatarImage({ className, src, alt, ...props }: React.ComponentProps<"img">) {
   const [hasError, setHasError] = React.useState(false);
 
-  if (!src || hasError) return null;
+  const resolvedSrc = src ? getBackendUrl(src) : "";
+
+  React.useEffect(() => {
+    setHasError(false);
+  }, [resolvedSrc]);
+
+  if (!resolvedSrc || hasError) return null;
 
   return (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt || ""}
       onError={() => setHasError(true)}
       className={cn(

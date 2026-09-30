@@ -1,6 +1,6 @@
 import * as React from "react"
 import { Building2, Globe, MapPin, Briefcase, Users, Calendar, Upload, Trash2, CheckCircle2, Loader2, AlertCircle, ChevronDown } from "lucide-react"
-import { fetchMyCompanyApi, updateMyCompanyApi, uploadCompanyLogoApi } from "../../utils/api"
+import { fetchMyCompanyApi, updateMyCompanyApi, uploadCompanyLogoApi, getBackendUrl } from "../../utils/api"
 import {
   validateCompanyName,
   validateMeaningfulText,
@@ -273,7 +273,7 @@ export function RecruiterCompanyProfile() {
             <div className="size-15 sm:size-16 rounded-xl border-2 border-[#E6E0D6] bg-cream flex items-center justify-center overflow-hidden shadow-xs">
               {logoUrl && !logoLoadFailed ? (
                 <img
-                  src={logoUrl}
+                  src={getBackendUrl(logoUrl)}
                   alt={companyName || "Logo"}
                   onError={() => setLogoLoadFailed(true)}
                   className="size-full object-cover"

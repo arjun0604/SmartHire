@@ -23,9 +23,14 @@ import { useIdleTimeout } from "./hooks/useIdleTimeout"
 
 import { AuthLoadingPage } from "./components/common/AuthLoadingPage"
 
+function isAuthCallbackPending() {
+  if (typeof window === "undefined") return false;
+  const search = window.location.search;
+  return (search.includes("code=") || search.includes("error=")) && search.includes("state=");
+}
+
 function getHomeRoute(profile) {
-  const hasToken = typeof window !== "undefined" && Boolean(localStorage.getItem("smarthire_token"));
-  if (!profile || !hasToken) return "/login";
+  if (!profile) return "/login";
   if (profile.onboardingCompleted) return "/dashboard";
   return profile.role === "recruiter" ? "/recruiter-onboarding" : "/candidate-onboarding";
 }
@@ -33,22 +38,25 @@ function getHomeRoute(profile) {
 function PublicRoute({ children }) {
   const { isLoading, isAuthenticated } = useAuth0();
   const { profile, isLoading: isProfileLoading } = useUser();
-  if (isLoading || isProfileLoading || isAuthenticated) {
-    const hasToken = typeof window !== "undefined" && Boolean(localStorage.getItem("smarthire_token"));
-    if (profile && hasToken) return <Navigate to={getHomeRoute(profile)} replace />;
+  const pending = isAuthCallbackPending();
+
+  if (isLoading || isProfileLoading || isAuthenticated || pending) {
+    if (profile) return <Navigate to={getHomeRoute(profile)} replace />;
     return <AuthLoadingPage />;
   }
   return children;
 }
 
 function ProtectedRoute({ children, requireOnboarding = true, targetRole }) {
-  const { isLoading } = useAuth0();
+  const { isLoading, isAuthenticated } = useAuth0();
   const { profile, isLoading: isProfileLoading } = useUser();
-  if (isLoading || isProfileLoading) {
+  const pending = isAuthCallbackPending();
+
+  if (isLoading || isProfileLoading || pending) {
     return <AuthLoadingPage />;
   }
-  const hasToken = typeof window !== "undefined" && Boolean(localStorage.getItem("smarthire_token"));
-  if (!profile || !hasToken) return <Navigate to="/login" replace />;
+  if (!isAuthenticated && !profile) return <Navigate to="/login" replace />;
+  if (!profile) return <AuthLoadingPage />;
 
   if (requireOnboarding && !profile.onboardingCompleted) {
     return <Navigate to={getHomeRoute(profile)} replace />;
@@ -70,7 +78,7 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <BrowserRouter>
+      <BrowserRouter basename="/SmartHire">
         <Routes>
           <Route path="/" element={<PublicRoute><Navigate to="/login" replace /></PublicRoute>} />
           <Route path="/signup" element={<PublicRoute><SignUp /></PublicRoute>} />

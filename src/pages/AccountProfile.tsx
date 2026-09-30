@@ -33,6 +33,7 @@ import {
   validateLocation,
   validateUrl,
 } from "../utils/validation"
+import { getLogoutReturnToUrl, getLoginPath } from "../utils/auth-sync"
 
 export default function AccountProfile() {
   const { logout: auth0Logout } = useAuth0();
@@ -294,10 +295,11 @@ export default function AccountProfile() {
 
   const handleLogout = () => {
     clearSession();
-    window.history.replaceState(null, "", "/login");
+    const returnTo = getLogoutReturnToUrl();
+    window.history.replaceState(null, "", getLoginPath());
     auth0Logout({
       logoutParams: {
-        returnTo: `${window.location.origin}/login`,
+        returnTo,
       },
     });
   };
@@ -314,10 +316,11 @@ export default function AccountProfile() {
     try {
       await deleteAccount();
       setIsDeleteModalOpen(false);
-      window.history.replaceState(null, "", "/login");
+      const returnTo = getLogoutReturnToUrl();
+      window.history.replaceState(null, "", getLoginPath());
       auth0Logout({
         logoutParams: {
-          returnTo: `${window.location.origin}/login`,
+          returnTo,
         },
       });
     } catch (err: unknown) {

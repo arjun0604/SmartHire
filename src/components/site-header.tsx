@@ -9,6 +9,7 @@ import {
 } from "@components/ui/avatar"
 import { CircleUserRoundIcon, BellIcon, LogOutIcon } from "lucide-react"
 import { getInitials } from "../utils/formatters"
+import { getLogoutReturnToUrl, getLoginPath } from "../utils/auth-sync"
 
 interface SiteHeaderProps {
   title?: string;
@@ -31,10 +32,11 @@ export function SiteHeader({ title = "Overview" }: SiteHeaderProps) {
 
   const handleLogout = () => {
     clearSession();
-    window.history.replaceState(null, "", "/login");
+    const returnTo = getLogoutReturnToUrl();
+    window.history.replaceState(null, "", getLoginPath());
     auth0Logout({
       logoutParams: {
-        returnTo: `${window.location.origin}/login`,
+        returnTo,
       },
     });
   };
