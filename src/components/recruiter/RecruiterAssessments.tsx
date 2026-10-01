@@ -18,6 +18,14 @@ import {
   closeJobAssessmentApi,
   type AssessmentStatus,
 } from "../../utils/api"
+import {
+  normalizeAssessmentStatus,
+  getAssessmentStatusLabel,
+  getAssessmentStatusBadgeClasses,
+  getAssessmentStatusDotClasses,
+  getAssessmentStatusDescription,
+  ASSESSMENT_STATUS_FILTER_OPTIONS,
+} from "../../utils/assessmentStatus"
 import { Skeleton } from "../ui/skeleton"
 
 interface JobAssessmentStats {
@@ -31,38 +39,6 @@ interface JobAssessmentStats {
   validationMessage?: string | null;
 }
 
-function getStatusLabel(status: AssessmentStatus): string {
-  switch (status) {
-    case "ACTIVE":
-      return "Active";
-    case "CONFIGURED":
-      return "Configured";
-    case "STARTED":
-      return "Started";
-    case "CLOSED":
-      return "Closed";
-    case "NOT_STARTED":
-    default:
-      return "Not Started";
-  }
-}
-
-function getStatusBadgeClasses(status: AssessmentStatus): string {
-  switch (status) {
-    case "ACTIVE":
-      return "bg-emerald-50 text-emerald-800 border-emerald-200";
-    case "CONFIGURED":
-      return "bg-amber-50 text-amber-800 border-amber-200";
-    case "STARTED":
-      return "bg-blue-50 text-blue-800 border-blue-200";
-    case "CLOSED":
-      return "bg-stone-100 text-stone-700 border-stone-200";
-    case "NOT_STARTED":
-    default:
-      return "bg-[#F5F2EB] text-[#78716C] border-[#E6E0D6]";
-  }
-}
-
 export function RecruiterAssessments() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -72,7 +48,7 @@ export function RecruiterAssessments() {
 
   const [statsMap, setStatsMap] = useState<Record<string, JobAssessmentStats>>({});
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | AssessmentStatus>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   useEffect(() => {
     if (recruiterJobs.length === 0 && !isRecruiterLoading) {
@@ -126,7 +102,7 @@ export function RecruiterAssessments() {
   }, [recruiterJobs]);
 
   const filteredJobs = useMemo(() => {
-    return recruiterJobs.filter((job) => {
+    const list = recruiterJobs.filter((job) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -137,30 +113,75 @@ export function RecruiterAssessments() {
       if (!matchesSearch) return false;
 
       const jobStats = statsMap[job.id];
-      const currentStatus: AssessmentStatus = jobStats?.status || "NOT_STARTED";
+      const rawStatus = jobStats?.status || job.assessment_status || "NOT_STARTED";
+      const normalized = normalizeAssessmentStatus(rawStatus, job.deadline);
 
       if (statusFilter !== "all") {
-        return currentStatus === statusFilter;
+        if (statusFilter === "IN_PROGRESS") {
+          return normalized === "IN_PROGRESS" || rawStatus === "ACTIVE" || rawStatus === "STARTED";
+        }
+        if (statusFilter === "SCHEDULED") {
+          return normalized === "SCHEDULED" || rawStatus === "CONFIGURED";
+        }
+        if (statusFilter === "NOT_STARTED") {
+          return normalized === "NOT_STARTED";
+        }
+        if (statusFilter === "COMPLETED") {
+          return normalized === "COMPLETED";
+        }
+        if (statusFilter === "CLOSED") {
+          return normalized === "CLOSED";
+        }
+        if (statusFilter === "EXPIRED") {
+          return normalized === "EXPIRED";
+        }
+        return normalized === statusFilter || rawStatus === statusFilter;
       }
       return true;
+    });
+
+    return list.sort((a, b) => {
+      const rawA = a.updated_at || a.updatedAt;
+      const rawB = b.updated_at || b.updatedAt;
+
+      const timeA = rawA ? new Date(rawA).getTime() : NaN;
+      const timeB = rawB ? new Date(rawB).getTime() : NaN;
+
+      const hasA = !isNaN(timeA);
+      const hasB = !isNaN(timeB);
+
+      if (hasA && hasB) {
+        return timeB - timeA;
+      }
+      if (hasA && !hasB) return -1;
+      if (!hasA && hasB) return 1;
+      return 0;
     });
   }, [recruiterJobs, searchQuery, statusFilter, statsMap]);
 
   const summary = useMemo(() => {
-    let activeCount = 0;
-    let configuredCount = 0;
+    let inProgressCount = 0;
+    let scheduledCount = 0;
     let notStartedCount = 0;
+    let completedCount = 0;
     let closedCount = 0;
+    let expiredCount = 0;
 
     for (const job of recruiterJobs) {
       const s = statsMap[job.id];
-      const st = s?.status || "NOT_STARTED";
-      if (st === "ACTIVE" || st === "STARTED") {
-        activeCount++;
-      } else if (st === "CONFIGURED") {
-        configuredCount++;
-      } else if (st === "CLOSED") {
+      const rawStatus = s?.status || job.assessment_status || "NOT_STARTED";
+      const normalized = normalizeAssessmentStatus(rawStatus, job.deadline);
+
+      if (normalized === "IN_PROGRESS") {
+        inProgressCount++;
+      } else if (normalized === "SCHEDULED") {
+        scheduledCount++;
+      } else if (normalized === "COMPLETED") {
+        completedCount++;
+      } else if (normalized === "CLOSED") {
         closedCount++;
+      } else if (normalized === "EXPIRED") {
+        expiredCount++;
       } else {
         notStartedCount++;
       }
@@ -168,10 +189,12 @@ export function RecruiterAssessments() {
 
     return {
       totalJobs: recruiterJobs.length,
-      activeCount,
-      configuredCount,
+      inProgressCount,
+      scheduledCount,
       notStartedCount,
+      completedCount,
       closedCount,
+      expiredCount,
     };
   }, [recruiterJobs, statsMap]);
 
@@ -242,7 +265,7 @@ export function RecruiterAssessments() {
 
   return (
     <div className="space-y-6 w-full min-w-0 max-w-full">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div className="rounded-2xl border border-[#E6E0D6] bg-white p-5 shadow-2xs">
           <span className="text-[11px] font-mono uppercase tracking-wider text-[#78716C] block">
             Total Roles
@@ -257,13 +280,25 @@ export function RecruiterAssessments() {
 
         <div className="rounded-2xl border border-[#E6E0D6] bg-white p-5 shadow-2xs">
           <span className="text-[11px] font-mono uppercase tracking-wider text-[#78716C] block">
-            Active Assessments
+            In Progress
           </span>
-          <span className="text-2xl sm:text-3xl font-serif font-bold text-emerald-800 mt-1 block">
-            {summary.activeCount}
+          <span className="text-2xl sm:text-3xl font-serif font-bold text-blue-700 mt-1 block">
+            {summary.inProgressCount}
           </span>
           <span className="text-xs text-[#78716C] mt-0.5 block truncate">
-            Screening assessments currently live for candidates
+            Screening assessments currently active for candidates
+          </span>
+        </div>
+
+        <div className="rounded-2xl border border-[#E6E0D6] bg-white p-5 shadow-2xs">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-[#78716C] block">
+            Scheduled
+          </span>
+          <span className="text-2xl sm:text-3xl font-serif font-bold text-purple-700 mt-1 block">
+            {summary.scheduledCount}
+          </span>
+          <span className="text-xs text-[#78716C] mt-0.5 block truncate">
+            Configured assessments ready for activation
           </span>
         </div>
       </div>
@@ -284,78 +319,86 @@ export function RecruiterAssessments() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 self-start lg:self-auto">
-            <div className="inline-flex rounded-xl bg-cream/70 p-1 border border-[#E6E0D6] text-xs">
-              <button
-                type="button"
-                onClick={() => setStatusFilter("all")}
-                className={`px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                  statusFilter === "all"
-                    ? "bg-white text-charcoal shadow-3xs"
-                    : "text-[#78716C] hover:text-charcoal"
-                }`}
-              >
-                All ({recruiterJobs.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("ACTIVE")}
-                className={`px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                  statusFilter === "ACTIVE"
-                    ? "bg-white text-emerald-800 shadow-3xs font-semibold"
-                    : "text-[#78716C] hover:text-charcoal"
-                }`}
-              >
-                Active ({summary.activeCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("CONFIGURED")}
-                className={`px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                  statusFilter === "CONFIGURED"
-                    ? "bg-white text-amber-800 shadow-3xs font-semibold"
-                    : "text-[#78716C] hover:text-charcoal"
-                }`}
-              >
-                Configured ({summary.configuredCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("NOT_STARTED")}
-                className={`px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                  statusFilter === "NOT_STARTED"
-                    ? "bg-white text-charcoal shadow-3xs font-semibold"
-                    : "text-[#78716C] hover:text-charcoal"
-                }`}
-              >
-                Not Started ({summary.notStartedCount})
-              </button>
-              {summary.closedCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setStatusFilter("CLOSED")}
-                  className={`px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                    statusFilter === "CLOSED"
-                      ? "bg-white text-stone-700 shadow-3xs font-semibold"
-                      : "text-[#78716C] hover:text-charcoal"
-                  }`}
-                >
-                  Closed ({summary.closedCount})
-                </button>
-              )}
-            </div>
+          <div className="flex items-center gap-2 self-start lg:self-auto">
+            <label
+              htmlFor="assessment-status-filter"
+              className="text-xs font-semibold text-[#78716C] whitespace-nowrap"
+            >
+              Status:
+            </label>
+            <select
+              id="assessment-status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-1.5 text-xs font-medium rounded-xl border border-[#E6E0D6] bg-white text-charcoal shadow-3xs focus:outline-hidden focus:border-terracotta focus:ring-1 focus:ring-terracotta/20 cursor-pointer"
+            >
+              {ASSESSMENT_STATUS_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-[#8E877D]" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search assessments by job title, department, or location..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl border border-[#E6E0D6] bg-[#FAF8F5] text-xs sm:text-sm text-charcoal placeholder-[#8E877D] focus:outline-hidden focus:border-terracotta focus:bg-white transition-colors"
-          />
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-[#8E877D]" />
+            <input
+              type="text"
+              aria-label="Search assessments"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search assessments by job title, department, or location..."
+              className="w-full pl-10 pr-9 py-2 rounded-xl border border-[#E6E0D6] bg-[#FAF8F5] text-xs sm:text-sm text-charcoal placeholder-[#8E877D] focus:outline-hidden focus:border-terracotta focus:bg-white transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-charcoal cursor-pointer"
+                title="Clear search"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full text-xs">
+            {ASSESSMENT_STATUS_FILTER_OPTIONS.map((opt) => {
+              const count =
+                opt.value === "all"
+                  ? summary.totalJobs
+                  : opt.value === "NOT_STARTED"
+                  ? summary.notStartedCount
+                  : opt.value === "IN_PROGRESS"
+                  ? summary.inProgressCount
+                  : opt.value === "SCHEDULED"
+                  ? summary.scheduledCount
+                  : opt.value === "COMPLETED"
+                  ? summary.completedCount
+                  : opt.value === "CLOSED"
+                  ? summary.closedCount
+                  : summary.expiredCount;
+
+              const isSelected = statusFilter === opt.value;
+
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setStatusFilter(opt.value)}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer shrink-0 ${
+                    isSelected
+                      ? "bg-white text-charcoal shadow-3xs border border-[#E6E0D6] font-semibold"
+                      : "text-[#78716C] hover:text-charcoal bg-cream/50 hover:bg-cream/80 border border-transparent"
+                  }`}
+                >
+                  {opt.label} ({count})
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {isRecruiterLoading ? (
@@ -414,7 +457,8 @@ export function RecruiterAssessments() {
             {filteredJobs.map((job) => {
               const jobStats = statsMap[job.id];
               const questionCount = jobStats?.count || 0;
-              const status: AssessmentStatus = jobStats?.status || "NOT_STARTED";
+              const rawStatus = jobStats?.status || job.assessment_status || "NOT_STARTED";
+              const normalized = normalizeAssessmentStatus(rawStatus, job.deadline);
               const isActionLoading = !!jobStats?.isActionLoading;
 
               return (
@@ -433,11 +477,13 @@ export function RecruiterAssessments() {
                       </div>
 
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${getStatusBadgeClasses(
-                          status
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${getAssessmentStatusBadgeClasses(
+                          rawStatus,
+                          job.deadline
                         )}`}
                       >
-                        {getStatusLabel(status)}
+                        <span className={`size-1.5 rounded-full shrink-0 ${getAssessmentStatusDotClasses(rawStatus, job.deadline)}`} />
+                        <span>{getAssessmentStatusLabel(rawStatus, job.deadline)}</span>
                       </span>
                     </div>
 
@@ -491,19 +537,11 @@ export function RecruiterAssessments() {
 
                   <div className="pt-4 mt-4 border-t border-[#F0ECE4] flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-[11px] text-[#78716C]">
-                      {status === "ACTIVE"
-                        ? "Live for eligible candidates"
-                        : status === "STARTED"
-                        ? "Candidates in progress"
-                        : status === "CLOSED"
-                        ? "Assessment access closed"
-                        : status === "CONFIGURED"
-                        ? "Ready for activation"
-                        : "Requires question configuration"}
+                      {getAssessmentStatusDescription(rawStatus, job.deadline)}
                     </span>
 
                     <div className="flex items-center gap-2">
-                      {status === "CONFIGURED" && (
+                      {(normalized === "SCHEDULED" || rawStatus === "CONFIGURED") && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -519,7 +557,7 @@ export function RecruiterAssessments() {
                         </button>
                       )}
 
-                      {(status === "ACTIVE" || status === "STARTED") && (
+                      {(normalized === "IN_PROGRESS" || rawStatus === "ACTIVE" || rawStatus === "STARTED") && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -534,7 +572,7 @@ export function RecruiterAssessments() {
                         </button>
                       )}
 
-                      {status === "CLOSED" && (
+                      {(normalized === "CLOSED" || rawStatus === "CLOSED") && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -557,7 +595,7 @@ export function RecruiterAssessments() {
                           handleManage(job.id, job.title);
                         }}
                         className={`inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                          status === "CONFIGURED"
+                          normalized === "SCHEDULED" || rawStatus === "CONFIGURED"
                             ? "border border-[#E6E0D6] bg-white hover:bg-cream text-charcoal shadow-3xs"
                             : "bg-terracotta text-white shadow-2xs hover:bg-terracotta-dark"
                         }`}

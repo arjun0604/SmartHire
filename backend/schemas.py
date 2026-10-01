@@ -663,6 +663,8 @@ class JobResponse(JobBase):
     applicant_count: int = 0
     match_score: Optional[int] = 85
     assessment_status: Optional[str] = "NOT_STARTED"
+    updated_at: Optional[datetime] = None
+    updatedAt: Optional[str] = None
 
     company: Optional[str] = None
     companyLogo: Optional[str] = None

@@ -31,6 +31,8 @@ export interface Job {
   requireAssessment: boolean;
   status: "Active" | "Draft";
   createdAt: string;
+  updated_at?: string;
+  updatedAt?: string;
   applicantCount: number;
   applicants: number;
   shortlisted: number;

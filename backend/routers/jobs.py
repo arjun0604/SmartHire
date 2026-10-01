@@ -106,6 +106,8 @@ def format_job_response(job: Job) -> JobResponse:
         postedDate=posted_date_str,
         postedRelative=posted_rel,
         createdAt=job.posted_at.isoformat() if job.posted_at else None,
+        updated_at=getattr(job, "updated_at", None) or job.posted_at,
+        updatedAt=(getattr(job, "updated_at", None) or job.posted_at).isoformat() if (getattr(job, "updated_at", None) or job.posted_at) else None,
         requireAssessment=bool(job.require_assessment),
         preferredQualifications=job.preferred_qualifications or [],
         requiredSkills=req_skills,
@@ -147,7 +149,7 @@ def get_jobs(
             detail="Access denied.",
         )
 
-    jobs = query.order_by(Job.posted_at.desc()).all()
+    jobs = query.order_by(Job.updated_at.desc().nullslast(), Job.posted_at.desc()).all()
     return [format_job_response(j) for j in jobs]
 
 
@@ -168,7 +170,7 @@ def get_recruiter_jobs(
     )
     if isinstance(status_filter, str) and status_filter.strip():
         query = query.filter(Job.status == status_filter.strip())
-    jobs = query.order_by(Job.posted_at.desc()).all()
+    jobs = query.order_by(Job.updated_at.desc().nullslast(), Job.posted_at.desc()).all()
     return [format_job_response(j) for j in jobs]
 
 
@@ -339,6 +341,7 @@ def update_job(
 
     for field, val in update_dict.items():
         setattr(job, field, val)
+    job.updated_at = datetime.now(timezone.utc)
 
     if required_skills is not None or preferred_skills is not None:
         current_req = [js.skill.name for js in job.job_skills if js.is_required]

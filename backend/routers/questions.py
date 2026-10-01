@@ -512,6 +512,7 @@ def update_assessment_settings(
             )
         job.assessment_question_count = payload.question_count
 
+    job.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(job)
 
@@ -570,6 +571,7 @@ def activate_assessment(
 
     job.assessment_status = "ACTIVE"
     job.require_assessment = True
+    job.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(job)
 
@@ -608,6 +610,7 @@ def close_assessment(
         )
 
     job.assessment_status = "CLOSED"
+    job.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(job)
 

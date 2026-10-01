@@ -137,6 +137,7 @@ class Job(Base):
     assessment_duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     assessment_question_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     posted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=True)
 
     __table_args__ = (
         CheckConstraint("work_mode IN ('Remote', 'Hybrid', 'On-site')", name="check_work_mode"),

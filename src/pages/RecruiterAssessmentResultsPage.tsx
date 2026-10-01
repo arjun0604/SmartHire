@@ -14,6 +14,7 @@ import {
   RotateCcw,
   ChevronLeft,
   ChevronRight,
+  XCircle,
 } from "lucide-react"
 import { SidebarProvider, SidebarInset } from "../components/ui/sidebar"
 import { AppSidebar } from "../components/app-sidebar"
@@ -27,6 +28,11 @@ import {
   type RecruiterCandidateDetailResultResponse,
   type AssessmentResultsQueryParams,
 } from "../utils/api"
+import {
+  getAssessmentStatusBadgeClasses,
+  getAssessmentStatusDotClasses,
+  getAssessmentStatusLabel,
+} from "../utils/assessmentStatus"
 
 function formatDuration(seconds: number | null): string {
   if (seconds === null || seconds === undefined) return "—";
@@ -53,33 +59,14 @@ function formatDate(iso: string | null): string {
 
 function getAttemptBadge(status?: string | null, badgeClassName?: string) {
   const norm = (status || "").toUpperCase();
-  if (norm === "SUBMITTED" || norm === "COMPLETED") {
-    return (
-      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 max-w-full ${badgeClassName || ""}`}>
-        <CheckCircle2 className="size-3 text-emerald-600 shrink-0" />
-        <span className="truncate">Completed</span>
-      </span>
-    );
-  }
-  if (norm === "TIMED_OUT" || norm === "TIMED OUT" || norm === "EXPIRED") {
-    return (
-      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 max-w-full ${badgeClassName || ""}`}>
-        <Clock className="size-3 text-amber-600 shrink-0" />
-        <span className="truncate">Timed Out</span>
-      </span>
-    );
-  }
-  if (norm === "IN_PROGRESS" || norm === "IN PROGRESS") {
-    return (
-      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200 max-w-full ${badgeClassName || ""}`}>
-        <RefreshCw className="size-3 text-blue-600 animate-spin shrink-0" />
-        <span className="truncate">In Progress</span>
-      </span>
-    );
-  }
+  const label = getAssessmentStatusLabel(norm);
+  const badgeClasses = getAssessmentStatusBadgeClasses(norm);
+  const dotClasses = getAssessmentStatusDotClasses(norm);
+
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 border border-stone-200 max-w-full ${badgeClassName || ""}`}>
-      <span className="truncate">Not Started</span>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border max-w-full ${badgeClasses} ${badgeClassName || ""}`}>
+      <span className={`size-1.5 rounded-full shrink-0 ${dotClasses}`} />
+      <span className="truncate">{label}</span>
     </span>
   );
 }
@@ -531,15 +518,19 @@ export default function RecruiterAssessmentResultsPage() {
 
                 {/* Status Filter */}
                 <div className="flex items-center gap-1.5">
+                  <label htmlFor="results-status-filter" className="text-xs font-semibold text-[#78716C] whitespace-nowrap">
+                    Status:
+                  </label>
                   <select
+                    id="results-status-filter"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="px-2.5 py-1.5 text-xs rounded-lg border border-[#E6E0D6] bg-white text-charcoal shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta cursor-pointer"
+                    className="px-2.5 py-1.5 text-xs rounded-lg border border-[#E6E0D6] bg-white text-charcoal shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta cursor-pointer font-medium"
                   >
                     <option value="all">All Statuses</option>
-                    <option value="completed">Completed</option>
-                    <option value="in_progress">In Progress</option>
                     <option value="not_started">Not Started</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
                     <option value="passed">Passed (≥ 60%)</option>
                     <option value="failed">Failed (&lt; 60%)</option>
                   </select>

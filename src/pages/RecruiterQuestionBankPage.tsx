@@ -39,38 +39,11 @@ import {
 import { MCQQuestionModal } from "../components/recruiter/MCQQuestionModal"
 import { DeleteQuestionModal } from "../components/recruiter/DeleteQuestionModal"
 import { ExcelUploadModal } from "../components/recruiter/ExcelUploadModal"
-
-function getStatusLabel(status: AssessmentStatus): string {
-  switch (status) {
-    case "ACTIVE":
-      return "Active";
-    case "CONFIGURED":
-      return "Configured";
-    case "STARTED":
-      return "Started";
-    case "CLOSED":
-      return "Closed";
-    case "NOT_STARTED":
-    default:
-      return "Not Started";
-  }
-}
-
-function getStatusBadgeClasses(status: AssessmentStatus): string {
-  switch (status) {
-    case "ACTIVE":
-      return "bg-emerald-50 text-emerald-800 border-emerald-200";
-    case "CONFIGURED":
-      return "bg-amber-50 text-amber-800 border-amber-200";
-    case "STARTED":
-      return "bg-blue-50 text-blue-800 border-blue-200";
-    case "CLOSED":
-      return "bg-stone-100 text-stone-700 border-stone-200";
-    case "NOT_STARTED":
-    default:
-      return "bg-[#F5F2EB] text-[#78716C] border-[#E6E0D6]";
-  }
-}
+import {
+  getAssessmentStatusLabel,
+  getAssessmentStatusBadgeClasses,
+  getAssessmentStatusDotClasses,
+} from "../utils/assessmentStatus"
 
 export default function RecruiterQuestionBankPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -471,11 +444,13 @@ export default function RecruiterQuestionBankPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 pt-4 border-t border-[#F0ECE4]">
               <div className="flex flex-wrap items-center gap-3">
                 <span
-                  className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeClasses(
-                    derivedStatus
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${getAssessmentStatusBadgeClasses(
+                    derivedStatus,
+                    job?.deadline
                   )}`}
                 >
-                  {getStatusLabel(derivedStatus)}
+                  <span className={`size-1.5 rounded-full shrink-0 ${getAssessmentStatusDotClasses(derivedStatus, job?.deadline)}`} />
+                  <span>{getAssessmentStatusLabel(derivedStatus, job?.deadline)}</span>
                 </span>
                 <span className="text-xs text-[#78716C]">
                   Questions: <strong className="text-charcoal font-mono">{questions.length}</strong>
@@ -694,11 +669,13 @@ export default function RecruiterQuestionBankPage() {
                   <div className="flex items-center justify-between pt-1">
                     <span>Assessment Status</span>
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadgeClasses(
-                        derivedStatus
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getAssessmentStatusBadgeClasses(
+                        derivedStatus,
+                        job?.deadline
                       )}`}
                     >
-                      {getStatusLabel(derivedStatus)}
+                      <span className={`size-1.5 rounded-full shrink-0 ${getAssessmentStatusDotClasses(derivedStatus, job?.deadline)}`} />
+                      <span>{getAssessmentStatusLabel(derivedStatus, job?.deadline)}</span>
                     </span>
                   </div>
                   <div className="flex items-center justify-between pt-2.5">
