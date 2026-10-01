@@ -628,7 +628,6 @@ def close_assessment(
 def get_job_assessment_results(
     job_id: UUID,
     search: Optional[str] = Query(None, description="Search candidate name or email"),
-    assessment_id: Optional[UUID] = Query(None, description="Assessment/Job ID to view results for"),
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (completed, in_progress, not_started, passed, failed)"),
     min_score: Optional[float] = Query(None, ge=0, description="Minimum score percentage (0-100)"),
     max_score: Optional[float] = Query(None, ge=0, description="Maximum score percentage (0-100)"),
@@ -637,11 +636,10 @@ def get_job_assessment_results(
     recruiter: Recruiter = Depends(get_current_recruiter),
     db: Session = Depends(get_db),
 ):
-    target_job_id = assessment_id if assessment_id else job_id
     job = (
         db.query(Job)
         .options(joinedload(Job.company))
-        .filter(Job.id == target_job_id)
+        .filter(Job.id == job_id)
         .first()
     )
     check_job_recruiter_access(job, recruiter)
@@ -713,9 +711,11 @@ def get_job_assessment_results(
             not_started_count += 1
 
     total_eligible = len(all_eligible_apps)
-    avg_score = round(sum(overview_scores) / len(overview_scores), 1) if overview_scores else None
-    avg_pct = round(sum(overview_percentages) / len(overview_percentages), 1) if overview_percentages else None
+    attended_count = started_count
+    attendance_rate = round((attended_count / total_eligible * 100), 1) if total_eligible > 0 else 0.0
     completion_rate = round((completed_count / total_eligible * 100), 1) if total_eligible > 0 else 0.0
+    avg_score = round(sum(overview_scores) / len(overview_scores), 2) if overview_scores else None
+    avg_pct = round(sum(overview_percentages) / len(overview_percentages), 1) if overview_percentages else None
 
     overview = RecruiterAssessmentOverview(
         total_eligible=total_eligible,
@@ -729,6 +729,8 @@ def get_job_assessment_results(
         average_percentage=avg_pct,
         completion_rate=completion_rate,
         completion_rate_percentage=completion_rate,
+        attendance_rate=attendance_rate,
+        attendance_rate_percentage=attendance_rate,
     )
 
     query = (

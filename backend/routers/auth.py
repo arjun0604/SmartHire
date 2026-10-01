@@ -252,8 +252,8 @@ def sync_user(
                     comp.website = payload.website
                 if payload.linkedin is not None:
                     comp.linkedin = payload.linkedin
-                if payload.logo_url is not None:
-                    comp.logo_url = payload.logo_url
+                if payload.logo_url and payload.logo_url.strip():
+                    comp.logo_url = payload.logo_url.strip()
         elif user.role == "candidate":
             if not user.candidate:
                 candidate = Candidate(

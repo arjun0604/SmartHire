@@ -1093,6 +1093,8 @@ class RecruiterAssessmentOverview(BaseModel):
     average_percentage: Optional[float] = None
     completion_rate: Optional[float] = None
     completion_rate_percentage: Optional[float] = None
+    attendance_rate: Optional[float] = None
+    attendance_rate_percentage: Optional[float] = None
 
 
 class RecruiterCandidateAssessmentItem(BaseModel):

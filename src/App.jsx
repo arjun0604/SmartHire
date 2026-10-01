@@ -18,6 +18,7 @@ import RecruiterAssessmentResultsPage from "./pages/RecruiterAssessmentResultsPa
 import CandidateAssessmentPage from "./pages/CandidateAssessmentPage"
 import NotFound from "./pages/NotFound"
 import { ErrorBoundary } from "./components/error-boundary"
+import { Toaster } from "sonner"
 import { useUser } from "./context/UserContext"
 import { useIdleTimeout } from "./hooks/useIdleTimeout"
 
@@ -256,6 +257,7 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+      <Toaster position="top-right" richColors />
     </ErrorBoundary>
   );
 }

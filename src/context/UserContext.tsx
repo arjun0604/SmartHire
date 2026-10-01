@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react"
 import { useAuth0 } from "@auth0/auth0-react"
+import { toast } from "sonner"
 import {
   buildProfileFromAuth0,
   syncProfileToBackend,
@@ -62,6 +63,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [savedJobIds, setSavedJobIds] = useState<string[]>([]);
   const isSyncingRef = useRef(false);
+  const pendingSavesRef = useRef<Set<string>>(new Set());
+  const savedJobIdsRef = useRef<string[]>(savedJobIds);
+  useEffect(() => {
+    savedJobIdsRef.current = savedJobIds;
+  }, [savedJobIds]);
 
   useEffect(() => {
     if (auth0Loading) return;
@@ -159,24 +165,47 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const toggleSaveJob = useCallback(
     async (jobId: string) => {
       const strId = String(jobId);
+
+      // Prevent accidental duplicate save requests while the same save operation is already pending
+      if (pendingSavesRef.current.has(strId)) {
+        return;
+      }
+
       if (!profile?.candidateId) {
         setSavedJobIds((prev) =>
           prev.includes(strId) ? prev.filter((id) => id !== strId) : [...prev, strId]
         );
         return;
       }
+
+      // Snapshot previous state for rollback on error
+      const previousState = [...savedJobIdsRef.current];
+
+      // Optimistic update: immediately update frontend state
+      setSavedJobIds((prev) =>
+        prev.includes(strId) ? prev.filter((id) => id !== strId) : [...prev, strId]
+      );
+
+      pendingSavesRef.current.add(strId);
+
       try {
         const response = await toggleSavedJobApi(profile.candidateId, strId);
         const isSaved = response.saved;
         const targetId = String(response.job_id);
+        // Synchronize with confirmed backend state
         setSavedJobIds((prev) => {
           if (isSaved) {
             return prev.includes(targetId) ? prev : [...prev, targetId];
           }
           return prev.filter((id) => id !== targetId);
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to toggle saved job:", err);
+        // Rollback on failure
+        setSavedJobIds(previousState);
+        toast.error("Failed to update saved job. Please try again.");
+      } finally {
+        pendingSavesRef.current.delete(strId);
       }
     },
     [profile]

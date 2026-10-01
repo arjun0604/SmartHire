@@ -1,17 +1,15 @@
-import { useState, useEffect, useMemo, useCallback } from "react"
-import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
+import { useParams, useLocation, Link } from "react-router-dom"
 import {
   ArrowLeft,
   CheckCircle2,
   Clock,
-  XCircle,
   AlertCircle,
   Users,
   Eye,
   RefreshCw,
   X,
   FileQuestion,
-  Sparkles,
   Search,
   RotateCcw,
   ChevronLeft,
@@ -21,8 +19,6 @@ import { SidebarProvider, SidebarInset } from "../components/ui/sidebar"
 import { AppSidebar } from "../components/app-sidebar"
 import { SiteHeader } from "../components/site-header"
 import { Skeleton } from "../components/ui/skeleton"
-import { useAppDispatch, useAppSelector } from "../store"
-import { fetchRecruiterJobsThunk } from "../store/slices/jobsSlice"
 import {
   fetchJobAssessmentResultsApi,
   fetchCandidateAssessmentDetailResultApi,
@@ -90,10 +86,7 @@ function getAttemptBadge(status?: string | null, badgeClassName?: string) {
 
 export default function RecruiterAssessmentResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
-  const navigate = useNavigate();
   const location = useLocation();
-  const dispatch = useAppDispatch();
-  const recruiterJobs = useAppSelector((state) => state.jobs.recruiterJobs);
   const navState = (location.state as any) || {};
 
   const [data, setData] = useState<RecruiterJobAssessmentResultsResponse | null>(null);
@@ -104,8 +97,10 @@ export default function RecruiterAssessmentResultsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [minScore, setMinScore] = useState("");
-  const [maxScore, setMaxScore] = useState("");
+  const [minScoreInput, setMinScoreInput] = useState("");
+  const [maxScoreInput, setMaxScoreInput] = useState("");
+  const [appliedScores, setAppliedScores] = useState<{ min?: number; max?: number }>({});
+  const [scoreError, setScoreError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
 
@@ -115,41 +110,78 @@ export default function RecruiterAssessmentResultsPage() {
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  // Load recruiter jobs for role selector if not present
-  useEffect(() => {
-    if (recruiterJobs.length === 0) {
-      dispatch(fetchRecruiterJobsThunk());
-    }
-  }, [dispatch, recruiterJobs.length]);
+  const activeRequestIdRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Debounce search input by 400ms
+  // Debounce candidate search input by 450ms
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-    }, 400);
+    }, 450);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Debounce and validate score inputs by 450ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const trimmedMin = minScoreInput.trim();
+      const trimmedMax = maxScoreInput.trim();
+
+      const hasMin = trimmedMin !== "";
+      const hasMax = trimmedMax !== "";
+
+      if (!hasMin && !hasMax) {
+        setAppliedScores({ min: undefined, max: undefined });
+        setScoreError(null);
+        return;
+      }
+
+      const parsedMin = hasMin ? Number(trimmedMin) : undefined;
+      const parsedMax = hasMax ? Number(trimmedMax) : undefined;
+
+      if (parsedMin !== undefined && (isNaN(parsedMin) || parsedMin < 0 || parsedMin > 100)) {
+        setScoreError("Min score must be between 0% and 100%");
+        return;
+      }
+      if (parsedMax !== undefined && (isNaN(parsedMax) || parsedMax < 0 || parsedMax > 100)) {
+        setScoreError("Max score must be between 0% and 100%");
+        return;
+      }
+      if (parsedMin !== undefined && parsedMax !== undefined && parsedMin > parsedMax) {
+        setScoreError("Min score cannot be greater than max score");
+        return;
+      }
+
+      setScoreError(null);
+      setAppliedScores({ min: parsedMin, max: parsedMax });
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [minScoreInput, maxScoreInput]);
 
   // Reset page to 1 when filters or search change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, statusFilter, minScore, maxScore]);
+  }, [debouncedSearch, statusFilter, appliedScores]);
 
   const hasActiveFilters = useMemo(() => {
     return (
       debouncedSearch.trim() !== "" ||
       statusFilter !== "all" ||
-      minScore.trim() !== "" ||
-      maxScore.trim() !== ""
+      appliedScores.min !== undefined ||
+      appliedScores.max !== undefined ||
+      minScoreInput.trim() !== "" ||
+      maxScoreInput.trim() !== ""
     );
-  }, [debouncedSearch, statusFilter, minScore, maxScore]);
+  }, [debouncedSearch, statusFilter, appliedScores, minScoreInput, maxScoreInput]);
 
   function handleResetFilters() {
     setSearchQuery("");
     setDebouncedSearch("");
     setStatusFilter("all");
-    setMinScore("");
-    setMaxScore("");
+    setMinScoreInput("");
+    setMaxScoreInput("");
+    setAppliedScores({ min: undefined, max: undefined });
+    setScoreError(null);
     setPage(1);
   }
 
@@ -165,8 +197,17 @@ export default function RecruiterAssessmentResultsPage() {
 
   const loadResults = useCallback(async () => {
     if (!jobId) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const currentRequestId = ++activeRequestIdRef.current;
     setIsLoading(true);
     setErrorMessage(null);
+
     try {
       const params: AssessmentResultsQueryParams = {
         page,
@@ -178,24 +219,43 @@ export default function RecruiterAssessmentResultsPage() {
       if (statusFilter !== "all") {
         params.status = statusFilter;
       }
-      if (minScore.trim() && !isNaN(Number(minScore))) {
-        params.min_score = Number(minScore);
+      if (appliedScores.min !== undefined) {
+        params.min_score = appliedScores.min;
       }
-      if (maxScore.trim() && !isNaN(Number(maxScore))) {
-        params.max_score = Number(maxScore);
+      if (appliedScores.max !== undefined) {
+        params.max_score = appliedScores.max;
       }
 
-      const res = await fetchJobAssessmentResultsApi(jobId, params);
-      setData(res);
+      const res = await fetchJobAssessmentResultsApi(jobId, params, controller.signal);
+      if (currentRequestId === activeRequestIdRef.current) {
+        setData(res);
+      }
     } catch (err: any) {
-      setErrorMessage(err?.response?.data?.detail || "Failed to load assessment results.");
+      if (
+        controller.signal.aborted ||
+        err?.name === "CanceledError" ||
+        err?.code === "ERR_CANCELED" ||
+        err?.message === "canceled"
+      ) {
+        return;
+      }
+      if (currentRequestId === activeRequestIdRef.current) {
+        setErrorMessage(err?.response?.data?.detail || "Failed to load assessment results.");
+      }
     } finally {
-      setIsLoading(false);
+      if (currentRequestId === activeRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [jobId, debouncedSearch, statusFilter, minScore, maxScore, page, limit]);
+  }, [jobId, debouncedSearch, statusFilter, appliedScores, page, limit]);
 
   useEffect(() => {
     loadResults();
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [loadResults]);
 
   async function handleOpenDetail(candidate: RecruiterCandidateAssessmentItem) {
@@ -255,19 +315,36 @@ export default function RecruiterAssessmentResultsPage() {
     const completed = data.overview.completed ?? data.overview.completed_count ?? 0;
     const notStarted = data.overview.not_started ?? data.overview.not_started_count ?? 0;
 
-    const avg = data.overview.average_score;
-    const hasAvg = completed > 0 && typeof avg === "number" && !isNaN(avg) && isFinite(avg);
+    // Attendance Rate = (attended / totalEligible) * 100, where attended = started + completed
+    let attendanceRate = data.overview.attendance_rate ?? data.overview.attendance_rate_percentage;
+    if (attendanceRate === undefined || attendanceRate === null || isNaN(attendanceRate)) {
+      // In the backend status model, started represents all candidates who began (STARTED + COMPLETED)
+      const attended = Math.max(started, completed);
+      attendanceRate = totalEligible > 0 ? Math.round((attended / totalEligible) * 1000) / 10 : 0;
+    }
+    const hasAttendanceRate = totalEligible > 0 && typeof attendanceRate === "number" && !isNaN(attendanceRate);
 
-    const compRate = data.overview.completion_rate ?? data.overview.completion_rate_percentage;
-    const hasCompRate = typeof compRate === "number" && !isNaN(compRate) && isFinite(compRate);
+    // Average Score represented as percentage (e.g., 73.3%)
+    const totalQuestions = data.total_questions || 0;
+    const avgPct =
+      data.overview.average_percentage !== undefined && data.overview.average_percentage !== null
+        ? data.overview.average_percentage
+        : typeof data.overview.average_score === "number" && totalQuestions > 0
+        ? Math.round((data.overview.average_score / totalQuestions) * 1000) / 10
+        : data.overview.average_score;
+    const hasAvg = completed > 0 && typeof avgPct === "number" && !isNaN(avgPct) && isFinite(avgPct);
 
     return {
       totalEligible,
       started,
       completed,
       notStarted,
-      averageScoreDisplay: hasAvg ? `${avg % 1 === 0 ? avg.toFixed(0) : avg}` : "—",
-      completionRateDisplay: hasCompRate ? `${compRate % 1 === 0 ? compRate.toFixed(0) : compRate}%` : (totalEligible > 0 ? "0%" : "—"),
+      averageScoreDisplay: hasAvg ? `${avgPct % 1 === 0 ? avgPct.toFixed(0) : avgPct.toFixed(1)}%` : "—",
+      attendanceRateDisplay: hasAttendanceRate
+        ? `${attendanceRate % 1 === 0 ? attendanceRate.toFixed(0) : attendanceRate.toFixed(1)}%`
+        : totalEligible > 0
+        ? "0%"
+        : "—",
     };
   }, [data]);
 
@@ -360,7 +437,7 @@ export default function RecruiterAssessmentResultsPage() {
             )}
           </div>
 
-          {isLoading ? (
+          {!data && isLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="rounded-xl border border-[#E6E0D6] bg-white p-4 space-y-2">
@@ -370,7 +447,7 @@ export default function RecruiterAssessmentResultsPage() {
               ))}
             </div>
           ) : overviewMetrics ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+            <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 transition-opacity duration-150 ${isLoading ? "opacity-75" : ""}`}>
               <div className="rounded-xl border border-[#E6E0D6] bg-white p-4 shadow-2xs space-y-1">
                 <span className="text-[11px] font-medium text-[#78716C] block">Total Invited</span>
                 <span className="font-mono text-xl sm:text-2xl font-bold text-charcoal block">
@@ -407,9 +484,9 @@ export default function RecruiterAssessmentResultsPage() {
               </div>
 
               <div className="rounded-xl border border-[#E6E0D6] bg-white p-4 shadow-2xs space-y-1">
-                <span className="text-[11px] font-medium text-[#78716C] block">Completion Rate</span>
+                <span className="text-[11px] font-medium text-[#78716C] block">Attendance Rate</span>
                 <span className="font-mono text-xl sm:text-2xl font-bold text-terracotta block">
-                  {overviewMetrics.completionRateDisplay}
+                  {overviewMetrics.attendanceRateDisplay}
                 </span>
               </div>
             </div>
@@ -469,50 +546,44 @@ export default function RecruiterAssessmentResultsPage() {
                 </div>
 
                 {/* Min/Max Score % */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-medium text-[#78716C]">Score %:</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={minScore}
-                    onChange={(e) => setMinScore(e.target.value)}
-                    placeholder="Min %"
-                    className="w-16 px-2 py-1.5 text-xs rounded-lg border border-[#E6E0D6] bg-white text-charcoal placeholder:text-[#8E877D] shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta"
-                  />
-                  <span className="text-[#8E877D] text-xs">–</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={maxScore}
-                    onChange={(e) => setMaxScore(e.target.value)}
-                    placeholder="Max %"
-                    className="w-16 px-2 py-1.5 text-xs rounded-lg border border-[#E6E0D6] bg-white text-charcoal placeholder:text-[#8E877D] shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta"
-                  />
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-[#78716C]">Score %:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={minScoreInput}
+                      onChange={(e) => setMinScoreInput(e.target.value)}
+                      placeholder="Min %"
+                      className={`w-16 px-2 py-1.5 text-xs rounded-lg border ${
+                        scoreError ? "border-amber-400 bg-amber-50/40 text-amber-900" : "border-[#E6E0D6] bg-white text-charcoal"
+                      } placeholder:text-[#8E877D] shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta`}
+                    />
+                    <span className="text-[#8E877D] text-xs">–</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={maxScoreInput}
+                      onChange={(e) => setMaxScoreInput(e.target.value)}
+                      placeholder="Max %"
+                      className={`w-16 px-2 py-1.5 text-xs rounded-lg border ${
+                        scoreError ? "border-amber-400 bg-amber-50/40 text-amber-900" : "border-[#E6E0D6] bg-white text-charcoal"
+                      } placeholder:text-[#8E877D] shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta`}
+                    />
+                  </div>
+                  {scoreError && (
+                    <span className="text-[10px] text-amber-700 font-medium">
+                      {scoreError}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* Assessment / Role Selection & Reset */}
-              <div className="flex items-center gap-2 self-start md:self-auto shrink-0 flex-wrap">
-                {recruiterJobs.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-medium text-[#78716C] hidden sm:inline">Role:</span>
-                    <select
-                      value={jobId}
-                      onChange={(e) => navigate(`/recruiter/jobs/${e.target.value}/assessment/results`)}
-                      className="max-w-[200px] truncate px-2.5 py-1.5 text-xs rounded-lg border border-[#E6E0D6] bg-white text-charcoal shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta cursor-pointer"
-                    >
-                      {recruiterJobs.map((j) => (
-                        <option key={j.id} value={j.id}>
-                          {j.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {hasActiveFilters && (
+              {/* Reset Filters (Role filter has been removed) */}
+              {hasActiveFilters && (
+                <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
                   <button
                     type="button"
                     onClick={handleResetFilters}
@@ -522,11 +593,11 @@ export default function RecruiterAssessmentResultsPage() {
                     <RotateCcw className="size-3 text-stone-500" />
                     <span>Reset</span>
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
-            {isLoading ? (
+            {!data && isLoading ? (
               <div className="p-6 space-y-3">
                 {[...Array(4)].map((_, i) => (
                   <Skeleton key={i} className="h-12 w-full rounded-lg" />
@@ -575,7 +646,7 @@ export default function RecruiterAssessmentResultsPage() {
                 </div>
               )
             ) : (
-              <>
+              <div className={`transition-opacity duration-150 ${isLoading ? "opacity-60 pointer-events-none" : ""}`}>
                 {candidateCounts.started === 0 && candidateCounts.completed === 0 && (
                   <div className="p-3.5 bg-[#FAF8F5] border-b border-[#F0ECE4] flex items-center gap-2 text-xs text-[#78716C]">
                     <AlertCircle className="size-4 text-terracotta shrink-0" />
@@ -705,7 +776,7 @@ export default function RecruiterAssessmentResultsPage() {
                     </div>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>

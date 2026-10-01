@@ -13,7 +13,7 @@ from backend.schemas import (
     CompanyResponse,
     CompanyUpdateRequest,
 )
-from backend.services.storage import upload_company_logo_file
+from backend.services.storage import upload_company_logo_file, delete_storage_file
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
@@ -140,6 +140,8 @@ async def upload_my_company_logo(
             detail="File signature does not match a supported image or SVG format.",
         )
 
+    old_logo_url = company.logo_url
+
     upload_result = await upload_company_logo_file(
         company_id=str(company.id),
         filename=file.filename or "logo.png",
@@ -150,6 +152,10 @@ async def upload_my_company_logo(
     company.logo_url = upload_result["file_url"]
     db.commit()
     db.refresh(company)
+
+    # Clean up previous logo file if it was replaced with a new path/file
+    if old_logo_url and old_logo_url.split("?")[0] != company.logo_url.split("?")[0]:
+        await delete_storage_file(old_logo_url)
 
     return {"logo_url": company.logo_url}
 

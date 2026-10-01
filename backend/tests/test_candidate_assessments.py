@@ -163,19 +163,31 @@ def assessment_setup(db_session: Session):
     try:
         test_job_ids = [j.id for j in db_session.query(Job.id).filter(Job.company_id.in_([company.id, company_other.id])).all()]
         if test_job_ids:
+            test_app_ids = [a.id for a in db_session.query(Application.id).filter(Application.job_id.in_(test_job_ids)).all()]
             test_attempt_ids = [a.id for a in db_session.query(AssessmentAttempt.id).filter(AssessmentAttempt.job_id.in_(test_job_ids)).all()]
             if test_attempt_ids:
                 db_session.query(AssessmentAttemptQuestion).filter(AssessmentAttemptQuestion.attempt_id.in_(test_attempt_ids)).delete(synchronize_session=False)
-            db_session.query(AssessmentAttempt).filter(AssessmentAttempt.job_id.in_(test_job_ids)).delete(synchronize_session=False)
+                db_session.query(AssessmentAttempt).filter(AssessmentAttempt.id.in_(test_attempt_ids)).delete(synchronize_session=False)
+            if test_app_ids:
+                db_session.query(ApplicationStatusHistory).filter(ApplicationStatusHistory.application_id.in_(test_app_ids)).delete(synchronize_session=False)
+                db_session.query(CandidateJobMatch).filter(CandidateJobMatch.application_id.in_(test_app_ids)).delete(synchronize_session=False)
+                db_session.query(Application).filter(Application.id.in_(test_app_ids)).delete(synchronize_session=False)
             db_session.query(MCQQuestion).filter(MCQQuestion.job_id.in_(test_job_ids)).delete(synchronize_session=False)
-            db_session.query(Application).filter(Application.job_id.in_(test_job_ids)).delete(synchronize_session=False)
+            db_session.query(CandidateJobMatch).filter(CandidateJobMatch.job_id.in_(test_job_ids)).delete(synchronize_session=False)
+            db_session.query(SavedJob).filter(SavedJob.job_id.in_(test_job_ids)).delete(synchronize_session=False)
             db_session.query(Job).filter(Job.id.in_(test_job_ids)).delete(synchronize_session=False)
 
-        db_session.query(Resume).filter(Resume.candidate_id.in_([cand_1.id, cand_2.id])).delete(synchronize_session=False)
-        db_session.query(Candidate).filter(Candidate.id.in_([cand_1.id, cand_2.id])).delete(synchronize_session=False)
+        cand_ids = [cand_1.id, cand_2.id]
+        user_ids = [recruiter_user.id, other_recruiter_user.id, cand_user_1.id, cand_user_2.id]
+        all_test_apps = db_session.query(Application.id).filter(Application.candidate_id.in_(cand_ids)).all()
+        if all_test_apps:
+            db_session.query(ApplicationStatusHistory).filter(ApplicationStatusHistory.application_id.in_([a.id for a in all_test_apps])).delete(synchronize_session=False)
+            db_session.query(Application).filter(Application.id.in_([a.id for a in all_test_apps])).delete(synchronize_session=False)
+        db_session.query(Resume).filter(Resume.candidate_id.in_(cand_ids)).delete(synchronize_session=False)
+        db_session.query(Candidate).filter(Candidate.id.in_(cand_ids)).delete(synchronize_session=False)
         db_session.query(Recruiter).filter(Recruiter.id.in_([recruiter.id, other_recruiter.id])).delete(synchronize_session=False)
         db_session.query(Company).filter(Company.id.in_([company.id, company_other.id])).delete(synchronize_session=False)
-        db_session.query(User).filter(User.id.in_([recruiter_user.id, other_recruiter_user.id, cand_user_1.id, cand_user_2.id])).delete(synchronize_session=False)
+        db_session.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)
         db_session.commit()
     except Exception:
         db_session.rollback()
@@ -1231,10 +1243,9 @@ def test_recruiter_assessment_results_search_filter_pagination(assessment_setup,
         res_invalid_status = client.get(f"/api/jobs/{job.id}/assessment/results?status=unknown_status")
         assert res_invalid_status.status_code == 400
 
-        # 11. Assessment ID query parameter
-        res_with_aid = client.get(f"/api/jobs/{job.id}/assessment/results?assessment_id={job.id}")
-        assert res_with_aid.status_code == 200
-        assert res_with_aid.json()["job_id"] == str(job.id)
+        # 11. Attendance rate and average score percentage verification
+        assert data_default["overview"]["attendance_rate"] == 66.7
+        assert data_default["overview"]["average_percentage"] == 100.0
 
         # 12. Unauthorized recruiter
         app.dependency_overrides[get_current_recruiter] = lambda: other_recruiter
@@ -1242,4 +1253,15 @@ def test_recruiter_assessment_results_search_filter_pagination(assessment_setup,
         assert res_unauth.status_code == 403
     finally:
         app.dependency_overrides.clear()
+        try:
+            cand_3_apps = [a.id for a in db_session.query(Application.id).filter(Application.candidate_id == cand_3.id).all()]
+            if cand_3_apps:
+                db_session.query(ApplicationStatusHistory).filter(ApplicationStatusHistory.application_id.in_(cand_3_apps)).delete(synchronize_session=False)
+                db_session.query(Application).filter(Application.id.in_(cand_3_apps)).delete(synchronize_session=False)
+            db_session.query(Resume).filter(Resume.candidate_id == cand_3.id).delete(synchronize_session=False)
+            db_session.query(Candidate).filter(Candidate.id == cand_3.id).delete(synchronize_session=False)
+            db_session.query(User).filter(User.id == cand_user_3.id).delete(synchronize_session=False)
+            db_session.commit()
+        except Exception:
+            db_session.rollback()
 

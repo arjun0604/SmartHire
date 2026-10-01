@@ -942,6 +942,8 @@ export interface RecruiterAssessmentOverview {
   average_percentage?: number | null;
   completion_rate?: number | null;
   completion_rate_percentage?: number | null;
+  attendance_rate?: number | null;
+  attendance_rate_percentage?: number | null;
 }
 
 export interface RecruiterCandidateAssessmentItem {
@@ -1069,7 +1071,6 @@ export async function updateAssessmentSettingsApi(
 
 export interface AssessmentResultsQueryParams {
   search?: string;
-  assessment_id?: string;
   status?: string;
   min_score?: number;
   max_score?: number;
@@ -1079,11 +1080,12 @@ export interface AssessmentResultsQueryParams {
 
 export async function fetchJobAssessmentResultsApi(
   jobId: string,
-  params?: AssessmentResultsQueryParams
+  params?: AssessmentResultsQueryParams,
+  signal?: AbortSignal
 ): Promise<RecruiterJobAssessmentResultsResponse> {
   const response = await apiClient.get<RecruiterJobAssessmentResultsResponse>(
     `/jobs/${jobId}/assessment/results`,
-    { params }
+    { params, signal }
   );
   return response.data;
 }
