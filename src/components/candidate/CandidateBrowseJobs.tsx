@@ -54,7 +54,7 @@ export function CandidateBrowseJobs() {
     if (sortBy === "title") {
       result = [...result].sort((a, b) => a.title.localeCompare(b.title));
     } else if (sortBy === "salary") {
-      result = [...result].sort((a, b) => (b.salaryMax || 0) - (a.salaryMax || 0));
+      result = [...result].sort((a, b) => (Number(b.salaryMax) || 0) - (Number(a.salaryMax) || 0));
     } else {
       result = [...result].sort((a, b) => {
         const timeA = new Date(a.postedDate || a.createdAt || 0).getTime();

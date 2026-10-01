@@ -1122,6 +1122,10 @@ class RecruiterJobAssessmentResultsResponse(BaseModel):
     total_questions: int
     overview: RecruiterAssessmentOverview
     candidates: List[RecruiterCandidateAssessmentItem]
+    page: int = 1
+    limit: int = 20
+    total: int = 0
+    total_pages: int = 0
 
 
 class RecruiterQuestionPerformanceItem(BaseModel):

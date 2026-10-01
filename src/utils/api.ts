@@ -970,6 +970,10 @@ export interface RecruiterJobAssessmentResultsResponse {
   total_questions: number;
   overview: RecruiterAssessmentOverview;
   candidates: RecruiterCandidateAssessmentItem[];
+  page?: number;
+  limit?: number;
+  total?: number;
+  total_pages?: number;
 }
 
 export interface RecruiterQuestionPerformanceItem {
@@ -1063,10 +1067,24 @@ export async function updateAssessmentSettingsApi(
   return response.data;
 }
 
+export interface AssessmentResultsQueryParams {
+  search?: string;
+  assessment_id?: string;
+  status?: string;
+  min_score?: number;
+  max_score?: number;
+  page?: number;
+  limit?: number;
+}
+
 export async function fetchJobAssessmentResultsApi(
-  jobId: string
+  jobId: string,
+  params?: AssessmentResultsQueryParams
 ): Promise<RecruiterJobAssessmentResultsResponse> {
-  const response = await apiClient.get<RecruiterJobAssessmentResultsResponse>(`/jobs/${jobId}/assessment/results`);
+  const response = await apiClient.get<RecruiterJobAssessmentResultsResponse>(
+    `/jobs/${jobId}/assessment/results`,
+    { params }
+  );
   return response.data;
 }
 

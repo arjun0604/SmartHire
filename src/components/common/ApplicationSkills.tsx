@@ -16,7 +16,7 @@ export function ApplicationSkills({ skills }: ApplicationSkillsProps) {
           {skills.map((skill) => (
             <span
               key={skill}
-              className="px-2.5 py-1 rounded-md bg-[#FAF8F5] border border-[#E6E0D6] text-xs font-medium text-charcoal"
+              className="px-2.5 py-1 rounded-md bg-cream border border-[#E6E0D6] text-xs font-medium text-charcoal"
             >
               {skill}
             </span>

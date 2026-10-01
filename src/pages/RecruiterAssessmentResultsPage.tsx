@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react"
-import { useParams, useLocation, Link } from "react-router-dom"
+import { useState, useEffect, useMemo, useCallback } from "react"
+import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
 import {
   ArrowLeft,
   CheckCircle2,
@@ -12,17 +12,24 @@ import {
   X,
   FileQuestion,
   Sparkles,
+  Search,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { SidebarProvider, SidebarInset } from "../components/ui/sidebar"
 import { AppSidebar } from "../components/app-sidebar"
 import { SiteHeader } from "../components/site-header"
 import { Skeleton } from "../components/ui/skeleton"
+import { useAppDispatch, useAppSelector } from "../store"
+import { fetchRecruiterJobsThunk } from "../store/slices/jobsSlice"
 import {
   fetchJobAssessmentResultsApi,
   fetchCandidateAssessmentDetailResultApi,
   type RecruiterJobAssessmentResultsResponse,
   type RecruiterCandidateAssessmentItem,
   type RecruiterCandidateDetailResultResponse,
+  type AssessmentResultsQueryParams,
 } from "../utils/api"
 
 function formatDuration(seconds: number | null): string {
@@ -83,18 +90,68 @@ function getAttemptBadge(status?: string | null, badgeClassName?: string) {
 
 export default function RecruiterAssessmentResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useAppDispatch();
+  const recruiterJobs = useAppSelector((state) => state.jobs.recruiterJobs);
   const navState = (location.state as any) || {};
 
   const [data, setData] = useState<RecruiterJobAssessmentResultsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Search, filter, and pagination states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [minScore, setMinScore] = useState("");
+  const [maxScore, setMaxScore] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+
   const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<RecruiterCandidateAssessmentItem | null>(null);
   const [detailData, setDetailData] = useState<RecruiterCandidateDetailResultResponse | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+
+  // Load recruiter jobs for role selector if not present
+  useEffect(() => {
+    if (recruiterJobs.length === 0) {
+      dispatch(fetchRecruiterJobsThunk());
+    }
+  }, [dispatch, recruiterJobs.length]);
+
+  // Debounce search input by 400ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Reset page to 1 when filters or search change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, minScore, maxScore]);
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      debouncedSearch.trim() !== "" ||
+      statusFilter !== "all" ||
+      minScore.trim() !== "" ||
+      maxScore.trim() !== ""
+    );
+  }, [debouncedSearch, statusFilter, minScore, maxScore]);
+
+  function handleResetFilters() {
+    setSearchQuery("");
+    setDebouncedSearch("");
+    setStatusFilter("all");
+    setMinScore("");
+    setMaxScore("");
+    setPage(1);
+  }
 
   const backDestination = useMemo(() => {
     if (navState.fromPath && navState.fromLabel) {
@@ -106,24 +163,40 @@ export default function RecruiterAssessmentResultsPage() {
     return { path: "/dashboard?tab=assessments", label: "Back to Assessments" };
   }, [navState, jobId]);
 
-  useEffect(() => {
-    if (!jobId) return;
-    loadResults();
-  }, [jobId]);
-
-  async function loadResults() {
+  const loadResults = useCallback(async () => {
     if (!jobId) return;
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const res = await fetchJobAssessmentResultsApi(jobId);
+      const params: AssessmentResultsQueryParams = {
+        page,
+        limit,
+      };
+      if (debouncedSearch.trim()) {
+        params.search = debouncedSearch.trim();
+      }
+      if (statusFilter !== "all") {
+        params.status = statusFilter;
+      }
+      if (minScore.trim() && !isNaN(Number(minScore))) {
+        params.min_score = Number(minScore);
+      }
+      if (maxScore.trim() && !isNaN(Number(maxScore))) {
+        params.max_score = Number(maxScore);
+      }
+
+      const res = await fetchJobAssessmentResultsApi(jobId, params);
       setData(res);
     } catch (err: any) {
       setErrorMessage(err?.response?.data?.detail || "Failed to load assessment results.");
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [jobId, debouncedSearch, statusFilter, minScore, maxScore, page, limit]);
+
+  useEffect(() => {
+    loadResults();
+  }, [loadResults]);
 
   async function handleOpenDetail(candidate: RecruiterCandidateAssessmentItem) {
     const attemptId = candidate.attempt_id || candidate.assessment_attempt_id;
@@ -351,8 +424,106 @@ export default function RecruiterAssessmentResultsPage() {
                 </p>
               </div>
               <span className="text-xs font-mono text-[#78716C]">
-                {data?.candidates.length || 0} candidate{data?.candidates.length === 1 ? "" : "s"}
+                {data?.total !== undefined ? `${data.total} candidate${data.total === 1 ? "" : "s"}` : `${data?.candidates.length || 0} candidate${data?.candidates.length === 1 ? "" : "s"}`}
               </span>
+            </div>
+
+            {/* Search and Filters Bar */}
+            <div className="p-4 bg-[#FAF8F5]/80 border-b border-[#F0ECE4] flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1 flex-wrap">
+                {/* Search Input */}
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                  <Search className="size-3.5 text-[#8E877D] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search candidate name or email..."
+                    className="w-full pl-8.5 pr-8 py-1.5 text-xs rounded-lg border border-[#E6E0D6] bg-white text-charcoal placeholder:text-[#8E877D] shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-charcoal cursor-pointer"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Status Filter */}
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs rounded-lg border border-[#E6E0D6] bg-white text-charcoal shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta cursor-pointer"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="completed">Completed</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="not_started">Not Started</option>
+                    <option value="passed">Passed (≥ 60%)</option>
+                    <option value="failed">Failed (&lt; 60%)</option>
+                  </select>
+                </div>
+
+                {/* Min/Max Score % */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-medium text-[#78716C]">Score %:</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={minScore}
+                    onChange={(e) => setMinScore(e.target.value)}
+                    placeholder="Min %"
+                    className="w-16 px-2 py-1.5 text-xs rounded-lg border border-[#E6E0D6] bg-white text-charcoal placeholder:text-[#8E877D] shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta"
+                  />
+                  <span className="text-[#8E877D] text-xs">–</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={maxScore}
+                    onChange={(e) => setMaxScore(e.target.value)}
+                    placeholder="Max %"
+                    className="w-16 px-2 py-1.5 text-xs rounded-lg border border-[#E6E0D6] bg-white text-charcoal placeholder:text-[#8E877D] shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta"
+                  />
+                </div>
+              </div>
+
+              {/* Assessment / Role Selection & Reset */}
+              <div className="flex items-center gap-2 self-start md:self-auto shrink-0 flex-wrap">
+                {recruiterJobs.length > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-[#78716C] hidden sm:inline">Role:</span>
+                    <select
+                      value={jobId}
+                      onChange={(e) => navigate(`/recruiter/jobs/${e.target.value}/assessment/results`)}
+                      className="max-w-[200px] truncate px-2.5 py-1.5 text-xs rounded-lg border border-[#E6E0D6] bg-white text-charcoal shadow-3xs focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta cursor-pointer"
+                    >
+                      {recruiterJobs.map((j) => (
+                        <option key={j.id} value={j.id}>
+                          {j.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#E6E0D6] bg-white hover:bg-cream text-charcoal text-xs font-semibold shadow-3xs transition-colors cursor-pointer"
+                    title="Reset all filters"
+                  >
+                    <RotateCcw className="size-3 text-stone-500" />
+                    <span>Reset</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {isLoading ? (
@@ -362,25 +533,47 @@ export default function RecruiterAssessmentResultsPage() {
                 ))}
               </div>
             ) : !data?.candidates || data.candidates.length === 0 ? (
-              <div className="p-12 text-center space-y-3">
-                <div className="size-12 rounded-full bg-[#FAF8F5] border border-[#E6E0D6] flex items-center justify-center mx-auto text-[#8E877D]">
-                  <Users className="size-6 text-[#8E877D]" />
-                </div>
-                <h4 className="font-serif text-base font-bold text-charcoal">No candidates in screening stage yet</h4>
-                <p className="text-xs text-[#78716C] max-w-md mx-auto leading-relaxed">
-                  Candidate assessment results will appear here once candidates in the screening stage start or complete their assessment. Move applicants to the screening stage in the Candidates workflow to grant them access.
-                </p>
-                {jobId && (
+              hasActiveFilters ? (
+                <div className="p-12 text-center space-y-3">
+                  <div className="size-12 rounded-full bg-[#FAF8F5] border border-[#E6E0D6] flex items-center justify-center mx-auto text-[#8E877D]">
+                    <Search className="size-6 text-[#8E877D]" />
+                  </div>
+                  <h4 className="font-serif text-base font-bold text-charcoal">No matching candidates found</h4>
+                  <p className="text-xs text-[#78716C] max-w-md mx-auto leading-relaxed">
+                    No assessment results match your current search and filter settings. Try adjusting your criteria or clearing filters.
+                  </p>
                   <div className="pt-2">
-                    <Link
-                      to={`/candidates/job/${jobId}`}
+                    <button
+                      type="button"
+                      onClick={handleResetFilters}
                       className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-[#E6E0D6] bg-white hover:bg-cream text-xs font-semibold text-charcoal shadow-3xs transition-colors cursor-pointer"
                     >
-                      <span>View Job Candidates</span>
-                    </Link>
+                      <RotateCcw className="size-3.5 text-stone-500" />
+                      <span>Reset Filters</span>
+                    </button>
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="p-12 text-center space-y-3">
+                  <div className="size-12 rounded-full bg-[#FAF8F5] border border-[#E6E0D6] flex items-center justify-center mx-auto text-[#8E877D]">
+                    <Users className="size-6 text-[#8E877D]" />
+                  </div>
+                  <h4 className="font-serif text-base font-bold text-charcoal">No candidates in screening stage yet</h4>
+                  <p className="text-xs text-[#78716C] max-w-md mx-auto leading-relaxed">
+                    Candidate assessment results will appear here once candidates in the screening stage start or complete their assessment. Move applicants to the screening stage in the Candidates workflow to grant them access.
+                  </p>
+                  {jobId && (
+                    <div className="pt-2">
+                      <Link
+                        to={`/candidates/job/${jobId}`}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-[#E6E0D6] bg-white hover:bg-cream text-xs font-semibold text-charcoal shadow-3xs transition-colors cursor-pointer"
+                      >
+                        <span>View Job Candidates</span>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )
             ) : (
               <>
                 {candidateCounts.started === 0 && candidateCounts.completed === 0 && (
@@ -464,6 +657,54 @@ export default function RecruiterAssessmentResultsPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {data && (data.total ?? data.candidates.length) > 0 && (
+                  <div className="p-4 border-t border-[#F0ECE4] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-[#78716C]">
+                    <div className="flex items-center gap-2">
+                      <span>
+                        Showing{" "}
+                        <strong className="font-semibold text-charcoal">
+                          {(page - 1) * limit + 1}
+                        </strong>{" "}
+                        to{" "}
+                        <strong className="font-semibold text-charcoal">
+                          {Math.min(page * limit, data.total ?? data.candidates.length)}
+                        </strong>{" "}
+                        of{" "}
+                        <strong className="font-semibold text-charcoal">
+                          {data.total ?? data.candidates.length}
+                        </strong>{" "}
+                        candidates
+                      </span>
+                      {data.total_pages && data.total_pages > 1 && (
+                        <span className="text-[#8E877D]">&bull; Page {page} of {data.total_pages}</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page <= 1 || isLoading}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#E6E0D6] bg-white hover:bg-cream text-charcoal text-xs font-semibold shadow-3xs transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft className="size-3.5" />
+                        <span>Previous</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPage((p) => (data.total_pages ? Math.min(data.total_pages, p + 1) : p + 1))}
+                        disabled={page >= (data.total_pages || 1) || isLoading}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#E6E0D6] bg-white hover:bg-cream text-charcoal text-xs font-semibold shadow-3xs transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <span>Next</span>
+                        <ChevronRight className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

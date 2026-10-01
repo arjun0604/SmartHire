@@ -92,13 +92,13 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({
       }}
     >
       <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col bg-white rounded-xl shadow-lg border border-[#E6E0D6] overflow-hidden">
-        <header className="bg-[#FAF8F5] border-b border-[#E6E0D6] px-6 py-5 flex items-start justify-between gap-4">
+        <header className="bg-cream border-b border-[#E6E0D6] px-6 py-5 flex items-start justify-between gap-4">
           <div className="space-y-1.5 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className={`inline-flex items-center px-2.5 py-0.5 text-xs font-medium rounded-md border ${isApplicationMatch
                     ? "bg-[#FAF2EE] text-terracotta border-[#E8D4CB]"
-                    : "bg-[#F4EFEA] text-charcoal border-[#E6E0D6]"
+                    : "bg-cream-muted text-charcoal border-[#E6E0D6]"
                   }`}
               >
                 {isApplicationMatch ? "Official Application Match" : "Resume Pre-Match"}
@@ -127,7 +127,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 bg-white text-charcoal">
-          <section aria-label="Score Summary" className="rounded-xl bg-[#FAF8F5] border border-[#E6E0D6] p-5">
+          <section aria-label="Score Summary" className="rounded-xl bg-cream border border-[#E6E0D6] p-5">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="rounded-lg bg-white border border-[#E6E0D6] p-4 flex flex-col justify-between shadow-3xs">
                 <div>
@@ -193,7 +193,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="rounded-lg border border-[#E6E0D6] bg-[#FAF8F5] p-4 space-y-2.5">
+              <div className="rounded-lg border border-[#E6E0D6] bg-cream p-4 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold uppercase tracking-wider text-charcoal">
                     Key Strengths
@@ -221,7 +221,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({
                 )}
               </div>
 
-              <div className="rounded-lg border border-[#E6E0D6] bg-[#FAF8F5] p-4 space-y-2.5">
+              <div className="rounded-lg border border-[#E6E0D6] bg-cream p-4 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold uppercase tracking-wider text-[#78716C]">
                     Areas to Strengthen
@@ -278,7 +278,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({
                       {b.required_skills.matched.map((s, idx) => (
                         <span
                           key={idx}
-                          className="px-2.5 py-1 rounded-md bg-[#FAF8F5] text-charcoal border border-[#E6E0D6] text-xs font-medium"
+                          className="px-2.5 py-1 rounded-md bg-cream text-charcoal border border-[#E6E0D6] text-xs font-medium"
                         >
                           {s}
                         </span>
@@ -331,7 +331,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({
                       {b.preferred_skills.matched.map((s, idx) => (
                         <span
                           key={idx}
-                          className="px-2.5 py-1 rounded-md bg-[#FAF8F5] text-charcoal border border-[#E6E0D6] text-xs font-medium"
+                          className="px-2.5 py-1 rounded-md bg-cream text-charcoal border border-[#E6E0D6] text-xs font-medium"
                         >
                           {s}
                         </span>
@@ -347,7 +347,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({
                       {b.preferred_skills.missing.map((s, idx) => (
                         <span
                           key={idx}
-                          className="px-2.5 py-1 rounded-md bg-[#F4EFEA] text-[#57534E] border border-[#E6E0D6] text-xs font-medium"
+                          className="px-2.5 py-1 rounded-md bg-cream-muted text-[#57534E] border border-[#E6E0D6] text-xs font-medium"
                         >
                           {s}
                         </span>
@@ -387,14 +387,14 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({
           </section>
         </div>
 
-        <footer className="px-6 py-4 border-t border-[#E6E0D6] bg-[#FAF8F5] flex items-center justify-between">
+        <footer className="px-6 py-4 border-t border-[#E6E0D6] bg-cream flex items-center justify-between">
           <span className="text-xs text-[#78716C]">
             SmartHire Match Review
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold rounded-md border border-[#E6E0D6] bg-white text-charcoal hover:bg-[#FAF8F5] transition-colors cursor-pointer shadow-3xs"
+            className="px-4 py-2 text-xs font-semibold rounded-md border border-[#E6E0D6] bg-white text-charcoal hover:bg-cream transition-colors cursor-pointer shadow-3xs"
           >
             Close
           </button>

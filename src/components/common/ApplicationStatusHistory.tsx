@@ -26,7 +26,7 @@ export function ApplicationStatusHistorySection({
       {statusHistory.length > 0 ? (
         <div className="overflow-x-auto rounded-xl border border-[#E6E0D6]">
           <table className="w-full text-left text-xs divide-y divide-[#E6E0D6]">
-            <thead className="bg-[#FAF8F5] font-mono text-[11px] uppercase tracking-wider text-[#78716C]">
+            <thead className="bg-cream font-mono text-[11px] uppercase tracking-wider text-[#78716C]">
               <tr>
                 <th className="py-2.5 px-4 font-semibold">Previous Status</th>
                 <th className="py-2.5 px-4 font-semibold">New Status</th>
@@ -39,7 +39,7 @@ export function ApplicationStatusHistorySection({
               {statusHistory.map((item, idx) => {
                 const actor = getHistoryActor(item);
                 return (
-                  <tr key={idx} className="hover:bg-[#FAF8F5]/60 transition-colors">
+                  <tr key={idx} className="hover:bg-cream/60 transition-colors">
                     <td className="py-3 px-4 whitespace-nowrap">
                       {item.from_status ? (
                         <span

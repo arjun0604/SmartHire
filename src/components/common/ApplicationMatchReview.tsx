@@ -126,7 +126,7 @@ export function ApplicationMatchReview({
 
   return (
     <div className="space-y-6">
-      <div className="bg-[#FAF8F5] border border-[#E6E0D6] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-cream border border-[#E6E0D6] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-semibold rounded-md border bg-[#FAF2EE] text-terracotta border-[#E8D4CB]">
@@ -144,7 +144,7 @@ export function ApplicationMatchReview({
         </div>
       </div>
 
-      <section aria-label="Score Summary" className="rounded-2xl bg-[#FAF8F5] border border-[#E6E0D6] p-5">
+      <section aria-label="Score Summary" className="rounded-2xl bg-cream border border-[#E6E0D6] p-5">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="rounded-xl bg-white border border-[#E6E0D6] p-4 flex flex-col justify-between shadow-3xs">
             <div>
@@ -210,7 +210,7 @@ export function ApplicationMatchReview({
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="rounded-xl border border-[#E6E0D6] bg-[#FAF8F5] p-4 space-y-2.5">
+          <div className="rounded-xl border border-[#E6E0D6] bg-cream p-4 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-charcoal">
                 Key Strengths
@@ -238,7 +238,7 @@ export function ApplicationMatchReview({
             )}
           </div>
 
-          <div className="rounded-xl border border-[#E6E0D6] bg-[#FAF8F5] p-4 space-y-2.5">
+          <div className="rounded-xl border border-[#E6E0D6] bg-cream p-4 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#78716C]">
                 Areas to Strengthen
@@ -307,7 +307,7 @@ export function ApplicationMatchReview({
                   {b.required_skills.missing.map((skill: string, idx: number) => (
                     <span
                       key={idx}
-                      className="px-2 py-0.5 rounded-md bg-[#FAF8F5] text-[#78716C] border border-[#E6E0D6] font-medium"
+                      className="px-2 py-0.5 rounded-md bg-cream text-[#78716C] border border-[#E6E0D6] font-medium"
                     >
                       {skill}
                     </span>
@@ -350,7 +350,7 @@ export function ApplicationMatchReview({
                   {b.preferred_skills.missing.map((skill: string, idx: number) => (
                     <span
                       key={idx}
-                      className="px-2 py-0.5 rounded-md bg-[#FAF8F5] text-[#8E877D] border border-[#E6E0D6] font-medium"
+                      className="px-2 py-0.5 rounded-md bg-cream text-[#8E877D] border border-[#E6E0D6] font-medium"
                     >
                       {skill}
                     </span>

@@ -107,7 +107,7 @@ export function JobCard({ job, fromContext }: JobCardProps) {
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleToggleSave();
+                handleToggleSave(e);
               }}
               className="p-1 rounded-md text-[#8E877D] hover:text-terracotta hover:bg-cream transition-colors cursor-pointer"
               title={isSaved ? "Remove from saved" : "Save job"}

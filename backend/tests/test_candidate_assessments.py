@@ -1054,3 +1054,192 @@ def test_employment_validation_persistence_and_matching(assessment_setup, db_ses
         assert persisted_app_4.candidate.location == "Bengaluru, India"
     finally:
         app.dependency_overrides.clear()
+
+
+def test_recruiter_assessment_results_search_filter_pagination(assessment_setup, db_session: Session):
+    job = assessment_setup["job"]
+    recruiter = assessment_setup["recruiter"]
+    other_recruiter = assessment_setup["other_recruiter"]
+    cand_1 = assessment_setup["candidate_1"]
+    resume_1 = assessment_setup["resume_1"]
+    cand_2 = assessment_setup["candidate_2"]
+    resume_2 = assessment_setup["resume_2"]
+
+    # 1. Create applications
+    create_application_in_status(db_session, cand_1.id, job.id, resume_1.id, "Screening")
+    create_application_in_status(db_session, cand_2.id, job.id, resume_2.id, "Screening")
+
+    # Add 3rd candidate
+    cand_user_3 = User(
+        id=uuid.uuid4(),
+        auth0_id=f"auth0|cand3_{uuid.uuid4().hex[:8]}",
+        email=f"charlie-{uuid.uuid4().hex[:6]}@example.com",
+        name="Charlie Screening",
+        role="candidate",
+    )
+    db_session.add(cand_user_3)
+    cand_3 = Candidate(id=uuid.uuid4(), user_id=cand_user_3.id, name="Charlie Screening")
+    db_session.add(cand_3)
+    resume_3 = Resume(id=uuid.uuid4(), candidate_id=cand_3.id, file_url="http://example.com/r3.pdf", file_name="r3.pdf")
+    db_session.add(resume_3)
+    create_application_in_status(db_session, cand_3.id, job.id, resume_3.id, "Screening")
+
+    job.assessment_status = "ACTIVE"
+    q1 = MCQQuestion(
+        id=uuid.uuid4(),
+        job_id=job.id,
+        question_text="Filter Test MCQ?",
+        option_a="A",
+        option_b="B",
+        option_c="C",
+        option_d="D",
+        correct_option="C",
+    )
+    db_session.add(q1)
+    db_session.commit()
+
+    # Candidate 1 attempts and submits (completed, score=100%)
+    app.dependency_overrides[get_current_candidate] = lambda: cand_1
+    try:
+        res_start = client.post(f"/api/jobs/{job.id}/assessment/start")
+        assert res_start.status_code == 200
+        attempt_id_1 = res_start.json()["id"]
+
+        q_order_info = res_start.json()["questions"][0]
+        q_id = q_order_info["question_id"]
+        selected_key = next(opt["key"] for opt in q_order_info["options"] if opt["text"] == "C")
+        client.post(
+            f"/api/assessment-attempts/{attempt_id_1}/answer",
+            json={"question_id": q_id, "selected_option": selected_key},
+        )
+        client.post(f"/api/assessment-attempts/{attempt_id_1}/submit")
+    finally:
+        app.dependency_overrides.clear()
+
+    # Candidate 2 attempts (in progress)
+    app.dependency_overrides[get_current_candidate] = lambda: cand_2
+    try:
+        res_start_2 = client.post(f"/api/jobs/{job.id}/assessment/start")
+        assert res_start_2.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+    # Candidate 3 has NOT started
+
+    app.dependency_overrides[get_current_recruiter] = lambda: recruiter
+    try:
+        # 1. Default request without query parameters
+        res_default = client.get(f"/api/jobs/{job.id}/assessment/results")
+        assert res_default.status_code == 200
+        data_default = res_default.json()
+        assert data_default["page"] == 1
+        assert data_default["limit"] == 20
+        assert data_default["total"] == 3
+        assert data_default["total_pages"] == 1
+        assert len(data_default["candidates"]) == 3
+        assert data_default["overview"]["total_eligible"] == 3
+        assert data_default["overview"]["completed"] == 1
+        assert data_default["overview"]["started"] == 2
+        assert data_default["overview"]["not_started"] == 1
+
+        # 2. Search by candidate name (case-insensitive)
+        res_search_name = client.get(f"/api/jobs/{job.id}/assessment/results?search=ALICE")
+        assert res_search_name.status_code == 200
+        data_search_name = res_search_name.json()
+        assert data_search_name["total"] == 1
+        assert data_search_name["candidates"][0]["candidate_name"] == "Alice Candidate"
+
+        # 3. Search by candidate email
+        res_search_email = client.get(f"/api/jobs/{job.id}/assessment/results?search={cand_user_3.email[:8]}")
+        assert res_search_email.status_code == 200
+        data_search_email = res_search_email.json()
+        assert data_search_email["total"] == 1
+        assert data_search_email["candidates"][0]["candidate_name"] == "Charlie Screening"
+
+        # 4. Status filter: completed
+        res_status_comp = client.get(f"/api/jobs/{job.id}/assessment/results?status=completed")
+        assert res_status_comp.status_code == 200
+        assert res_status_comp.json()["total"] == 1
+        assert res_status_comp.json()["candidates"][0]["status"] == "Completed"
+
+        # Status filter: in_progress
+        res_status_inp = client.get(f"/api/jobs/{job.id}/assessment/results?status=in_progress")
+        assert res_status_inp.status_code == 200
+        assert res_status_inp.json()["total"] == 1
+        assert res_status_inp.json()["candidates"][0]["status"] == "In Progress"
+
+        # Status filter: not_started
+        res_status_ns = client.get(f"/api/jobs/{job.id}/assessment/results?status=not_started")
+        assert res_status_ns.status_code == 200
+        assert res_status_ns.json()["total"] == 1
+        assert res_status_ns.json()["candidates"][0]["status"] == "Not Started"
+
+        # Status filter: passed (score >= 60%)
+        res_status_pass = client.get(f"/api/jobs/{job.id}/assessment/results?status=passed")
+        assert res_status_pass.status_code == 200
+        assert res_status_pass.json()["total"] == 1
+        assert res_status_pass.json()["candidates"][0]["candidate_name"] == "Alice Candidate"
+
+        # Status filter: failed (score < 60%)
+        res_status_fail = client.get(f"/api/jobs/{job.id}/assessment/results?status=failed")
+        assert res_status_fail.status_code == 200
+        assert res_status_fail.json()["total"] == 0
+
+        # 5. Score filters: min_score and max_score
+        res_score_high = client.get(f"/api/jobs/{job.id}/assessment/results?min_score=80")
+        assert res_score_high.status_code == 200
+        assert res_score_high.json()["total"] == 1
+
+        res_score_low = client.get(f"/api/jobs/{job.id}/assessment/results?max_score=50")
+        assert res_score_low.status_code == 200
+        assert res_score_low.json()["total"] == 0
+
+        # 6. Combined filters
+        res_multi = client.get(f"/api/jobs/{job.id}/assessment/results?search=alice&status=completed&min_score=60")
+        assert res_multi.status_code == 200
+        assert res_multi.json()["total"] == 1
+        assert res_multi.json()["candidates"][0]["candidate_name"] == "Alice Candidate"
+
+        # 7. Pagination
+        res_p1 = client.get(f"/api/jobs/{job.id}/assessment/results?page=1&limit=2")
+        assert res_p1.status_code == 200
+        data_p1 = res_p1.json()
+        assert data_p1["page"] == 1
+        assert data_p1["limit"] == 2
+        assert data_p1["total"] == 3
+        assert data_p1["total_pages"] == 2
+        assert len(data_p1["candidates"]) == 2
+
+        res_p2 = client.get(f"/api/jobs/{job.id}/assessment/results?page=2&limit=2")
+        assert res_p2.status_code == 200
+        data_p2 = res_p2.json()
+        assert data_p2["page"] == 2
+        assert data_p2["total_pages"] == 2
+        assert len(data_p2["candidates"]) == 1
+
+        # 8. Empty search
+        res_empty = client.get(f"/api/jobs/{job.id}/assessment/results?search=NonExistentCandXyz")
+        assert res_empty.status_code == 200
+        assert res_empty.json()["total"] == 0
+        assert len(res_empty.json()["candidates"]) == 0
+
+        # 9. Validation: min_score > max_score
+        res_invalid_score = client.get(f"/api/jobs/{job.id}/assessment/results?min_score=90&max_score=60")
+        assert res_invalid_score.status_code == 400
+
+        # 10. Validation: invalid status
+        res_invalid_status = client.get(f"/api/jobs/{job.id}/assessment/results?status=unknown_status")
+        assert res_invalid_status.status_code == 400
+
+        # 11. Assessment ID query parameter
+        res_with_aid = client.get(f"/api/jobs/{job.id}/assessment/results?assessment_id={job.id}")
+        assert res_with_aid.status_code == 200
+        assert res_with_aid.json()["job_id"] == str(job.id)
+
+        # 12. Unauthorized recruiter
+        app.dependency_overrides[get_current_recruiter] = lambda: other_recruiter
+        res_unauth = client.get(f"/api/jobs/{job.id}/assessment/results")
+        assert res_unauth.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+

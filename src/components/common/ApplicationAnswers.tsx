@@ -20,7 +20,7 @@ export function ApplicationAnswers({ application }: ApplicationAnswersProps) {
           <span className="text-xs font-semibold text-charcoal block">
             Are you currently employed?
           </span>
-          <div className="text-xs text-[#44403C] leading-relaxed p-3.5 rounded-xl bg-[#FAF8F5] border border-[#E6E0D6]">
+          <div className="text-xs text-[#44403C] leading-relaxed p-3.5 rounded-xl bg-cream border border-[#E6E0D6]">
             {isEmployed ? "Yes" : "No"}
           </div>
         </div>
@@ -29,7 +29,7 @@ export function ApplicationAnswers({ application }: ApplicationAnswersProps) {
           <span className="text-xs font-semibold text-charcoal block">
             Why interested in this position?
           </span>
-          <div className="text-xs text-[#44403C] leading-relaxed p-3.5 rounded-xl bg-[#FAF8F5] border border-[#E6E0D6]">
+          <div className="text-xs text-[#44403C] leading-relaxed p-3.5 rounded-xl bg-cream border border-[#E6E0D6]">
             {application.why_interested || "No answer provided."}
           </div>
         </div>
@@ -38,7 +38,7 @@ export function ApplicationAnswers({ application }: ApplicationAnswersProps) {
           <span className="text-xs font-semibold text-charcoal block">
             Relevant Experience:
           </span>
-          <div className="text-xs text-[#44403C] leading-relaxed p-3.5 rounded-xl bg-[#FAF8F5] border border-[#E6E0D6]">
+          <div className="text-xs text-[#44403C] leading-relaxed p-3.5 rounded-xl bg-cream border border-[#E6E0D6]">
             {application.relevant_experience || "No answer provided."}
           </div>
         </div>
@@ -48,7 +48,7 @@ export function ApplicationAnswers({ application }: ApplicationAnswersProps) {
             <span className="text-xs font-semibold text-charcoal block">
               Additional Information:
             </span>
-            <div className="text-xs text-[#44403C] leading-relaxed p-3.5 rounded-xl bg-[#FAF8F5] border border-[#E6E0D6]">
+            <div className="text-xs text-[#44403C] leading-relaxed p-3.5 rounded-xl bg-cream border border-[#E6E0D6]">
               {application.additional_information}
             </div>
           </div>

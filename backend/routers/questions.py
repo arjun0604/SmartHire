@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
+import math
 from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, or_
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from backend.database import get_db
@@ -15,6 +16,7 @@ from backend.models import (
     Job,
     MCQQuestion,
     Recruiter,
+    User,
 )
 from backend.schemas import (
     AssessmentConfigurePayload,
@@ -625,16 +627,44 @@ def close_assessment(
 @router.get("/jobs/{job_id}/assessment/results", response_model=RecruiterJobAssessmentResultsResponse)
 def get_job_assessment_results(
     job_id: UUID,
+    search: Optional[str] = Query(None, description="Search candidate name or email"),
+    assessment_id: Optional[UUID] = Query(None, description="Assessment/Job ID to view results for"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (completed, in_progress, not_started, passed, failed)"),
+    min_score: Optional[float] = Query(None, ge=0, description="Minimum score percentage (0-100)"),
+    max_score: Optional[float] = Query(None, ge=0, description="Maximum score percentage (0-100)"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(20, ge=1, le=100, description="Number of items per page"),
     recruiter: Recruiter = Depends(get_current_recruiter),
     db: Session = Depends(get_db),
 ):
+    target_job_id = assessment_id if assessment_id else job_id
     job = (
         db.query(Job)
         .options(joinedload(Job.company))
-        .filter(Job.id == job_id)
+        .filter(Job.id == target_job_id)
         .first()
     )
     check_job_recruiter_access(job, recruiter)
+
+    if min_score is not None and max_score is not None:
+        if min_score > max_score:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="min_score cannot be greater than max_score",
+            )
+
+    normalized_status: Optional[str] = None
+    if status_filter is not None and status_filter.strip():
+        norm = status_filter.strip().lower().replace(" ", "_").replace("-", "_")
+        if norm in ("submitted", "expired"):
+            norm = "completed"
+        valid_statuses = {"completed", "in_progress", "not_started", "passed", "failed"}
+        if norm not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status '{status_filter}'. Valid options are: completed, in_progress, not_started, passed, failed.",
+            )
+        normalized_status = norm
 
     total_questions = (
         db.query(func.count(MCQQuestion.id))
@@ -643,11 +673,10 @@ def get_job_assessment_results(
         or 0
     )
 
-    applications = (
+    all_eligible_apps = (
         db.query(Application)
         .outerjoin(AssessmentAttempt, AssessmentAttempt.application_id == Application.id)
         .options(
-            joinedload(Application.candidate).joinedload(Candidate.user),
             joinedload(Application.assessment_attempt),
         )
         .filter(
@@ -657,37 +686,138 @@ def get_job_assessment_results(
                 AssessmentAttempt.id.isnot(None),
             ),
         )
-        .distinct()
+        .all()
+    )
+
+    now_utc = datetime.now(timezone.utc)
+    started_count = 0
+    completed_count = 0
+    not_started_count = 0
+    overview_scores: List[int] = []
+    overview_percentages: List[float] = []
+
+    for app in all_eligible_apps:
+        attempt = app.assessment_attempt
+        if attempt:
+            started_count += 1
+            if attempt.status == "IN_PROGRESS" and attempt.expires_at and now_utc >= attempt.expires_at:
+                grade_and_submit_attempt(attempt, db, now_utc)
+
+            if attempt.status in ("SUBMITTED", "EXPIRED"):
+                completed_count += 1
+                score = attempt.score or 0
+                pct = float(attempt.percentage) if attempt.percentage is not None else (round((score / total_questions * 100), 1) if total_questions > 0 else 0.0)
+                overview_scores.append(score)
+                overview_percentages.append(pct)
+        else:
+            not_started_count += 1
+
+    total_eligible = len(all_eligible_apps)
+    avg_score = round(sum(overview_scores) / len(overview_scores), 1) if overview_scores else None
+    avg_pct = round(sum(overview_percentages) / len(overview_percentages), 1) if overview_percentages else None
+    completion_rate = round((completed_count / total_eligible * 100), 1) if total_eligible > 0 else 0.0
+
+    overview = RecruiterAssessmentOverview(
+        total_eligible=total_eligible,
+        started=started_count,
+        started_count=started_count,
+        completed=completed_count,
+        completed_count=completed_count,
+        not_started=not_started_count,
+        not_started_count=not_started_count,
+        average_score=avg_score,
+        average_percentage=avg_pct,
+        completion_rate=completion_rate,
+        completion_rate_percentage=completion_rate,
+    )
+
+    query = (
+        db.query(Application)
+        .join(Application.candidate)
+        .join(Candidate.user)
+        .outerjoin(AssessmentAttempt, AssessmentAttempt.application_id == Application.id)
+        .filter(
+            Application.job_id == job.id,
+            or_(
+                func.upper(Application.status).in_(["SCREENING", "SHORTLISTED"]),
+                AssessmentAttempt.id.isnot(None),
+            ),
+        )
+    )
+
+    if search and search.strip():
+        search_pattern = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                Candidate.name.ilike(search_pattern),
+                User.email.ilike(search_pattern),
+            )
+        )
+
+    calc_pct = func.coalesce(
+        AssessmentAttempt.percentage,
+        case(
+            (AssessmentAttempt.total_questions > 0, AssessmentAttempt.score * 100.0 / AssessmentAttempt.total_questions),
+            else_=0.0,
+        ),
+    )
+
+    if normalized_status:
+        if normalized_status == "completed":
+            query = query.filter(AssessmentAttempt.status.in_(["SUBMITTED", "EXPIRED"]))
+        elif normalized_status == "in_progress":
+            query = query.filter(AssessmentAttempt.status == "IN_PROGRESS")
+        elif normalized_status == "not_started":
+            query = query.filter(AssessmentAttempt.id.is_(None))
+        elif normalized_status == "passed":
+            query = query.filter(
+                AssessmentAttempt.status.in_(["SUBMITTED", "EXPIRED"]),
+                calc_pct >= 60.0,
+            )
+        elif normalized_status == "failed":
+            query = query.filter(
+                AssessmentAttempt.status.in_(["SUBMITTED", "EXPIRED"]),
+                calc_pct < 60.0,
+            )
+
+    if min_score is not None:
+        query = query.filter(
+            AssessmentAttempt.status.in_(["SUBMITTED", "EXPIRED"]),
+            calc_pct >= min_score,
+        )
+
+    if max_score is not None:
+        query = query.filter(
+            AssessmentAttempt.status.in_(["SUBMITTED", "EXPIRED"]),
+            calc_pct <= max_score,
+        )
+
+    total = query.count()
+    total_pages = math.ceil(total / limit) if total > 0 else 0
+    offset = (page - 1) * limit
+
+    paginated_apps = (
+        query.options(
+            joinedload(Application.candidate).joinedload(Candidate.user),
+            joinedload(Application.assessment_attempt),
+        )
+        .order_by(Application.applied_at.desc(), Application.id.desc())
+        .offset(offset)
+        .limit(limit)
         .all()
     )
 
     candidate_items: List[RecruiterCandidateAssessmentItem] = []
-    started_count = 0
-    completed_count = 0
-    not_started_count = 0
-    scores: List[int] = []
-    percentages: List[float] = []
-
-    for app in applications:
+    for app in paginated_apps:
         cand = app.candidate
         cand_name = cand.name if cand else "Unknown Candidate"
         cand_email = cand.user.email if cand and cand.user else "No email"
         attempt = app.assessment_attempt
 
         if attempt:
-            started_count += 1
-            if attempt.status == "IN_PROGRESS" and attempt.expires_at:
-                now_utc = datetime.now(timezone.utc)
-                if now_utc >= attempt.expires_at:
-                    grade_and_submit_attempt(attempt, db, now_utc)
-
             if attempt.status in ("SUBMITTED", "EXPIRED"):
-                completed_count += 1
                 score = attempt.score or 0
                 pct = float(attempt.percentage) if attempt.percentage is not None else (round((score / total_questions * 100), 1) if total_questions > 0 else 0.0)
-                scores.append(score)
-                percentages.append(pct)
-
                 candidate_items.append(
                     RecruiterCandidateAssessmentItem(
                         candidate_id=cand.id,
@@ -728,7 +858,6 @@ def get_job_assessment_results(
                     )
                 )
         else:
-            not_started_count += 1
             candidate_items.append(
                 RecruiterCandidateAssessmentItem(
                     candidate_id=cand.id,
@@ -749,25 +878,6 @@ def get_job_assessment_results(
                 )
             )
 
-    total_eligible = len(applications)
-    avg_score = round(sum(scores) / len(scores), 1) if scores else None
-    avg_pct = round(sum(percentages) / len(percentages), 1) if percentages else None
-    completion_rate = round((completed_count / total_eligible * 100), 1) if total_eligible > 0 else 0.0
-
-    overview = RecruiterAssessmentOverview(
-        total_eligible=total_eligible,
-        started=started_count,
-        started_count=started_count,
-        completed=completed_count,
-        completed_count=completed_count,
-        not_started=not_started_count,
-        not_started_count=not_started_count,
-        average_score=avg_score,
-        average_percentage=avg_pct,
-        completion_rate=completion_rate,
-        completion_rate_percentage=completion_rate,
-    )
-
     company_name = job.company.name if job.company else "Unknown Company"
 
     return RecruiterJobAssessmentResultsResponse(
@@ -779,6 +889,10 @@ def get_job_assessment_results(
         total_questions=total_questions,
         overview=overview,
         candidates=candidate_items,
+        page=page,
+        limit=limit,
+        total=total,
+        total_pages=total_pages,
     )
 
 

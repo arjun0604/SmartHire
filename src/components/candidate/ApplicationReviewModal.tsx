@@ -794,7 +794,7 @@ export function ApplicationReviewModal({
               <span className="text-[10px] font-mono uppercase tracking-wider text-red-700 font-bold block">
                 Error Details
               </span>
-              <p className="text-red-900 font-medium leading-relaxed break-words">
+              <p className="text-red-900 font-medium leading-relaxed wrap-break-word">
                 {submissionErrorMessage || "An unexpected error occurred while submitting your application. Please check your connection and try again."}
               </p>
             </div>
@@ -846,7 +846,7 @@ export function ApplicationReviewModal({
               </div>
             </div>
 
-            {job.require_assessment && (
+            {job.requireAssessment && (
               <div className="w-full max-w-md mx-auto rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-left space-y-2.5">
                 <div className="flex items-center gap-2 text-amber-900 font-semibold text-xs">
                   <HelpCircle className="size-4 text-amber-700" />

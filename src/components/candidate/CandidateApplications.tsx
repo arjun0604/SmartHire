@@ -85,7 +85,7 @@ export function CandidateApplications() {
             const company = app.company_name || job?.company || "Company";
             const location = job?.location || app.job_location || "Remote";
             const assessment = assessmentMap[app.id];
-            const hasAssessmentRequirement = Boolean(assessment || job?.require_assessment);
+            const hasAssessmentRequirement = Boolean(assessment || job?.requireAssessment);
 
             return (
               <div
@@ -124,7 +124,7 @@ export function CandidateApplications() {
                   </div>
 
                   {hasAssessmentRequirement && (
-                    <div className="mt-3 p-2.5 rounded-xl bg-[#FAF8F5] border border-[#E6E0D6] text-xs">
+                    <div className="mt-3 p-2.5 rounded-xl bg-cream border border-[#E6E0D6] text-xs">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-charcoal text-[11px] flex items-center gap-1">
                           <span>MCQ Assessment:</span>
