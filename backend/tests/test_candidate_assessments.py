@@ -177,17 +177,30 @@ def assessment_setup(db_session: Session):
             db_session.query(SavedJob).filter(SavedJob.job_id.in_(test_job_ids)).delete(synchronize_session=False)
             db_session.query(Job).filter(Job.id.in_(test_job_ids)).delete(synchronize_session=False)
 
-        cand_ids = [cand_1.id, cand_2.id]
-        user_ids = [recruiter_user.id, other_recruiter_user.id, cand_user_1.id, cand_user_2.id]
-        all_test_apps = db_session.query(Application.id).filter(Application.candidate_id.in_(cand_ids)).all()
-        if all_test_apps:
-            db_session.query(ApplicationStatusHistory).filter(ApplicationStatusHistory.application_id.in_([a.id for a in all_test_apps])).delete(synchronize_session=False)
-            db_session.query(Application).filter(Application.id.in_([a.id for a in all_test_apps])).delete(synchronize_session=False)
-        db_session.query(Resume).filter(Resume.candidate_id.in_(cand_ids)).delete(synchronize_session=False)
-        db_session.query(Candidate).filter(Candidate.id.in_(cand_ids)).delete(synchronize_session=False)
-        db_session.query(Recruiter).filter(Recruiter.id.in_([recruiter.id, other_recruiter.id])).delete(synchronize_session=False)
+        all_test_users = db_session.query(User).filter(
+            (User.email.like("%@test.com")) | (User.email.like("%@example.com")) | (User.email.like("%@corp.com"))
+        ).all()
+        all_user_ids = [u.id for u in all_test_users] + [recruiter_user.id, other_recruiter_user.id, cand_user_1.id, cand_user_2.id]
+        all_cands = db_session.query(Candidate).filter(Candidate.user_id.in_(all_user_ids)).all()
+        all_cand_ids = list({c.id for c in all_cands} | {cand_1.id, cand_2.id})
+        if all_cand_ids:
+            all_cand_apps = [a.id for a in db_session.query(Application.id).filter(Application.candidate_id.in_(all_cand_ids)).all()]
+            if all_cand_apps:
+                db_session.query(ApplicationStatusHistory).filter(ApplicationStatusHistory.application_id.in_(all_cand_apps)).delete(synchronize_session=False)
+                db_session.query(CandidateJobMatch).filter(CandidateJobMatch.application_id.in_(all_cand_apps)).delete(synchronize_session=False)
+                db_session.query(Application).filter(Application.id.in_(all_cand_apps)).delete(synchronize_session=False)
+            c_att_ids = [a.id for a in db_session.query(AssessmentAttempt.id).filter(AssessmentAttempt.candidate_id.in_(all_cand_ids)).all()]
+            if c_att_ids:
+                db_session.query(AssessmentAttemptQuestion).filter(AssessmentAttemptQuestion.attempt_id.in_(c_att_ids)).delete(synchronize_session=False)
+                db_session.query(AssessmentAttempt).filter(AssessmentAttempt.id.in_(c_att_ids)).delete(synchronize_session=False)
+            db_session.query(CandidateJobMatch).filter(CandidateJobMatch.candidate_id.in_(all_cand_ids)).delete(synchronize_session=False)
+            db_session.query(SavedJob).filter(SavedJob.candidate_id.in_(all_cand_ids)).delete(synchronize_session=False)
+            db_session.query(Resume).filter(Resume.candidate_id.in_(all_cand_ids)).delete(synchronize_session=False)
+            db_session.query(CandidateSkill).filter(CandidateSkill.candidate_id.in_(all_cand_ids)).delete(synchronize_session=False)
+            db_session.query(Candidate).filter(Candidate.id.in_(all_cand_ids)).delete(synchronize_session=False)
+        db_session.query(Recruiter).filter(Recruiter.user_id.in_(all_user_ids)).delete(synchronize_session=False)
         db_session.query(Company).filter(Company.id.in_([company.id, company_other.id])).delete(synchronize_session=False)
-        db_session.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)
+        db_session.query(User).filter(User.id.in_(all_user_ids)).delete(synchronize_session=False)
         db_session.commit()
     except Exception:
         db_session.rollback()

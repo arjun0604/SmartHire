@@ -82,9 +82,9 @@ export default function RecruiterOnboarding() {
     if (!file) return;
 
     const ext = file.name.split(".").pop()?.toLowerCase();
-    const validExtensions = ["png", "jpg", "jpeg", "webp", "svg"];
+    const validExtensions = ["png", "jpg", "jpeg", "webp"];
     if (!file.type.startsWith("image/") && (!ext || !validExtensions.includes(ext))) {
-      setFieldErrors((prev) => ({ ...prev, logo: "Please upload a valid image file (PNG, JPG, WEBP, or SVG)." }));
+      setFieldErrors((prev) => ({ ...prev, logo: "Please upload a valid image file (PNG, JPG, or WEBP)." }));
       if (logoInputRef.current) logoInputRef.current.value = "";
       return;
     }
@@ -95,8 +95,8 @@ export default function RecruiterOnboarding() {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setFieldErrors((prev) => ({ ...prev, logo: "Company logo size must be less than 5MB." }));
+    if (file.size > 2 * 1024 * 1024) {
+      setFieldErrors((prev) => ({ ...prev, logo: "Company logo size must be less than 2MB." }));
       if (logoInputRef.current) logoInputRef.current.value = "";
       return;
     }
@@ -486,7 +486,7 @@ export default function RecruiterOnboarding() {
                     <input
                       ref={logoInputRef}
                       type="file"
-                      accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                      accept="image/png,image/jpeg,image/webp"
                       className="hidden"
                       onChange={handleLogoSelect}
                     />

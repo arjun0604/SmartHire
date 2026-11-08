@@ -21,10 +21,11 @@ import {
 import { CreateJobModal } from "../components/recruiter/CreateJobModal"
 import { ApplicationReviewModal } from "../components/candidate/ApplicationReviewModal"
 import { useUser } from "../context/UserContext"
-import { fetchJobByIdApi, fetchCurrentJobMatchApi, fetchApplicationMatchApi, fetchJobQuestionsApi, fetchMyJobAssessmentAttemptApi, type MatchReport, type CandidateAssessmentMyAttemptResponse } from "../utils/api"
+import { fetchJobByIdApi, fetchCurrentJobMatchApi, fetchApplicationMatchApi, fetchJobQuestionsApi, fetchMyJobAssessmentAttemptApi, isTimeoutError, isNetworkError, type MatchReport, type CandidateAssessmentMyAttemptResponse } from "../utils/api"
 import { formatSalaryRange } from "../utils/salary"
 import { formatDisplayDate, getApplicationStatusBadgeClass } from "../utils/formatters"
 import { MatchReportModal } from "../components/common/MatchReportModal"
+import { CompanyLogo } from "../components/common/CompanyLogo"
 
 export default function JobDetails() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -52,6 +53,7 @@ export default function JobDetails() {
   const [isAccessDenied, setIsAccessDenied] = useState(false);
   const [isNotFound, setIsNotFound] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [matchReport, setMatchReport] = useState<MatchReport | null>(null);
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
   const [isMatchLoading, setIsMatchLoading] = useState(false);
@@ -88,13 +90,20 @@ export default function JobDetails() {
           setDirectJob(fetched);
           setIsAccessDenied(false);
           setIsNotFound(false);
+          setLoadError(null);
         }
       } catch (err) {
-        if (isSubscribed && isAxiosError(err)) {
-          if (err.response?.status === 403) {
-            setIsAccessDenied(true);
-          } else if (err.response?.status === 404) {
-            setIsNotFound(true);
+        if (isSubscribed) {
+          if (isAxiosError(err)) {
+            if (err.response?.status === 403) {
+              setIsAccessDenied(true);
+            } else if (err.response?.status === 404) {
+              setIsNotFound(true);
+            } else {
+              setLoadError("Unable to load job details. Please try again.");
+            }
+          } else {
+            setLoadError("Unable to load job details. Please try again.");
           }
         }
       } finally {
@@ -169,14 +178,18 @@ export default function JobDetails() {
       setIsMatchModalOpen(true);
     } catch (err: unknown) {
       if (isAxiosError(err)) {
-        const detail = err.response?.data?.detail;
-        if (typeof detail === "string" && detail.trim()) {
-          setMatchError(detail);
+        if (isTimeoutError(err) || isNetworkError(err) || !err.response) {
+          setMatchError("Unable to load match report. Please try again.");
         } else {
-          setMatchError("Could not load match report. Please upload a resume first.");
+          const detail = err.response.data?.detail;
+          if (typeof detail === "string" && detail.trim()) {
+            setMatchError(detail.trim());
+          } else {
+            setMatchError("Unable to load match report. Please try again.");
+          }
         }
       } else {
-        setMatchError("Could not load match report. Please try again.");
+        setMatchError("Unable to load match report. Please try again.");
       }
     } finally {
       setIsMatchLoading(false);
@@ -281,6 +294,57 @@ export default function JobDetails() {
     );
   }
 
+  if (loadError && !matchedJob) {
+    return (
+      <SidebarProvider>
+        <AppSidebar activeTab={sidebarTab} />
+        <SidebarInset className="bg-cream/40 min-h-screen">
+          <SiteHeader title="Job Details" />
+          <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
+            <h2 className="font-serif text-xl font-bold text-charcoal">Connection Error</h2>
+            <p className="text-xs text-[#8E877D] mt-1 max-w-sm">
+              {loadError}
+            </p>
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setLoadError(null);
+                  setIsDirectLoading(true);
+                  fetchJobByIdApi(jobId)
+                    .then((fetched) => {
+                      setDirectJob(fetched);
+                      setIsAccessDenied(false);
+                      setIsNotFound(false);
+                    })
+                    .catch((err) => {
+                      if (isAxiosError(err) && err.response?.status === 404) {
+                        setIsNotFound(true);
+                      } else {
+                        setLoadError("Unable to load job details. Please try again.");
+                      }
+                    })
+                    .finally(() => setIsDirectLoading(false));
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-terracotta px-4 py-2 text-xs font-semibold text-white hover:bg-terracotta-dark transition-colors cursor-pointer"
+              >
+                <span>Retry</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(backRoute)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E6E0D6] bg-white px-4 py-2 text-xs font-semibold text-charcoal hover:bg-cream transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="size-3.5" />
+                <span>{backDestination.label}</span>
+              </button>
+            </div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    );
+  }
+
   if (isNotFound || !job) {
     return (
       <SidebarProvider>
@@ -372,19 +436,26 @@ export default function JobDetails() {
 
             <div className="rounded-2xl border border-[#EBE6DD] bg-white p-5 sm:p-6 shadow-2xs">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <span className="text-xs font-mono text-terracotta uppercase tracking-wider font-semibold">
-                      {job.department}
-                    </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      {job.status}
-                    </span>
-                  </div>
+                <div className="flex items-start gap-4">
+                  <CompanyLogo
+                    logoUrl={job.companyLogo}
+                    companyName={job.company}
+                    className="size-12 sm:size-14 rounded-xl border border-[#E6E0D6] bg-cream p-1 shrink-0"
+                    fallbackClassName="text-base"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className="text-xs font-mono text-terracotta uppercase tracking-wider font-semibold">
+                        {job.department}
+                      </span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {job.status}
+                      </span>
+                    </div>
 
-                  <h1 className="font-serif text-2xl sm:text-3xl font-bold text-charcoal mt-1.5">
-                    {job.title}
-                  </h1>
+                    <h1 className="font-serif text-2xl sm:text-3xl font-bold text-charcoal mt-1.5">
+                      {job.title}
+                    </h1>
 
                   <p className="text-xs sm:text-sm text-[#78716C] flex items-center gap-2 mt-1.5 flex-wrap">
                     {job.company_id ? (
@@ -410,6 +481,7 @@ export default function JobDetails() {
                     <span>{job.workMode}</span>
                   </p>
                 </div>
+              </div>
 
                 <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
                   {isRecruiter && (
@@ -556,13 +628,23 @@ export default function JobDetails() {
           {matchError && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-center justify-between">
               <span>{matchError}</span>
-              <button
-                type="button"
-                onClick={() => setMatchError(null)}
-                className="text-amber-700 hover:text-amber-900 font-bold ml-2 cursor-pointer"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-3 ml-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleOpenMatchReport}
+                  disabled={isMatchLoading}
+                  className="font-semibold text-amber-800 hover:text-amber-950 underline cursor-pointer"
+                >
+                  Retry
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMatchError(null)}
+                  className="text-amber-700 hover:text-amber-900 font-bold cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
           )}
 

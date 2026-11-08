@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from backend.database import get_db
+from backend.database import SessionLocal, get_db
 from backend.auth import (
     get_current_candidate,
     get_current_recruiter,
@@ -42,7 +43,8 @@ def format_application_response(app: Application) -> ApplicationResponse:
     candidate_name = app.candidate.name if app.candidate else None
     candidate_email = app.candidate.user.email if app.candidate and app.candidate.user else None
     job_title = app.job.title if app.job else None
-    company_name = app.job.company.name if app.job and app.job.company else "Meridian Labs"
+    company_name = app.job.company.name if app.job and app.job.company else ""
+    company_logo = app.job.company.logo_url if app.job and app.job.company else None
     resume_name = app.resume.file_name if app.resume else (app.candidate.resumes[0].file_name if app.candidate and app.candidate.resumes else None)
     resume_url = app.resume.file_url if app.resume else None
 
@@ -111,6 +113,8 @@ def format_application_response(app: Application) -> ApplicationResponse:
         candidate_dob=candidate_dob,
         job_title=job_title,
         company_name=company_name,
+        company_logo=company_logo,
+        companyLogo=company_logo,
         resume_name=resume_name,
         resume_url=resume_url,
         skills=candidate_skills,
@@ -127,9 +131,32 @@ def format_application_response(app: Application) -> ApplicationResponse:
     )
 
 
+def generate_application_match_background(application_id: UUID):
+    db = SessionLocal()
+    try:
+        app = (
+            db.query(Application)
+            .options(
+                joinedload(Application.job).selectinload(Job.job_skills).joinedload(JobSkill.skill),
+                joinedload(Application.candidate).selectinload(Candidate.skills).joinedload(CandidateSkill.skill),
+                joinedload(Application.resume),
+            )
+            .filter(Application.id == application_id)
+            .first()
+        )
+        if app:
+            get_or_create_application_match(db=db, application=app)
+            db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 @router.post("", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
 def create_application(
     payload: ApplicationCreate,
+    background_tasks: BackgroundTasks,
     candidate: Candidate = Depends(get_current_candidate),
     db: Session = Depends(get_db),
 ):
@@ -177,14 +204,19 @@ def create_application(
 
     existing = (
         db.query(Application)
+        .options(
+            joinedload(Application.job).joinedload(Job.company),
+            joinedload(Application.candidate).joinedload(Candidate.user),
+            joinedload(Application.resume),
+            joinedload(Application.match),
+            joinedload(Application.assessment_attempt),
+            joinedload(Application.candidate).selectinload(Candidate.skills).joinedload(CandidateSkill.skill),
+        )
         .filter(Application.candidate_id == candidate.id, Application.job_id == job.id)
         .first()
     )
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Candidate has already applied to this job",
-        )
+        return format_application_response(existing)
 
     now_ts = datetime.now(timezone.utc)
     new_app = Application(
@@ -203,25 +235,42 @@ def create_application(
         is_currently_employed=payload.is_currently_employed,
         additional_information=payload.additional_information,
     )
-    db.add(new_app)
-    db.flush()
-
-    status_history = ApplicationStatusHistory(
-        application_id=new_app.id,
-        from_status=None,
-        to_status="Applied",
-        changed_by=candidate.user_id,
-        changed_at=now_ts,
-        reason=None,
-    )
-    db.add(status_history)
 
     try:
-        get_or_create_application_match(db=db, application=new_app)
-    except Exception:
-        pass
+        db.add(new_app)
+        db.flush()
 
-    db.commit()
+        status_history = ApplicationStatusHistory(
+            application_id=new_app.id,
+            from_status=None,
+            to_status="Applied",
+            changed_by=candidate.user_id,
+            changed_at=now_ts,
+            reason=None,
+        )
+        db.add(status_history)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = (
+            db.query(Application)
+            .options(
+                joinedload(Application.job).joinedload(Job.company),
+                joinedload(Application.candidate).joinedload(Candidate.user),
+                joinedload(Application.resume),
+                joinedload(Application.match),
+                joinedload(Application.assessment_attempt),
+                joinedload(Application.candidate).selectinload(Candidate.skills).joinedload(CandidateSkill.skill),
+            )
+            .filter(Application.candidate_id == candidate.id, Application.job_id == job.id)
+            .first()
+        )
+        if existing:
+            return format_application_response(existing)
+        raise
+
+    background_tasks.add_task(generate_application_match_background, new_app.id)
+
     created_app = (
         db.query(Application)
         .options(

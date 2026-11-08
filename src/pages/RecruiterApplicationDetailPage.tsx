@@ -21,6 +21,7 @@ import { AppSidebar } from "../components/app-sidebar"
 import { SidebarInset, SidebarProvider } from "../components/ui/sidebar"
 import { SiteHeader } from "../components/site-header"
 import { Skeleton } from "../components/ui/skeleton"
+import { CompanyLogo } from "../components/common/CompanyLogo"
 import {
   formatDisplayDate,
   getApplicationStatusBadgeClass,
@@ -291,6 +292,7 @@ export default function RecruiterApplicationDetailPage() {
 
   const jobTitle = application?.job_title || job?.title || "Job Opening";
   const companyName = application?.company_name || job?.company || "Company";
+  const companyLogo = application?.companyLogo || application?.company_logo || job?.companyLogo;
 
   return (
     <SidebarProvider>
@@ -300,38 +302,45 @@ export default function RecruiterApplicationDetailPage() {
 
         <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6 lg:py-8 lg:pl-28 lg:pr-8 w-full min-w-0">
           <div className="border-b border-[#E6E0D6] pb-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
-            <div className="min-w-0 space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#78716C] hover:text-charcoal transition-colors cursor-pointer group"
-                >
-                  <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
-                  <span>{backDestination.label}</span>
-                </button>
-
-                {application?.status && (
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-semibold border ${getApplicationStatusBadgeClass(
-                      application.status
-                    )}`}
+            <div className="flex items-start gap-4 min-w-0">
+              <CompanyLogo
+                logoUrl={companyLogo}
+                companyName={companyName}
+                className="size-12 sm:size-14 rounded-xl border border-[#E6E0D6] bg-cream p-1 shrink-0"
+                fallbackClassName="text-base"
+              />
+              <div className="min-w-0 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleBack}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#78716C] hover:text-charcoal transition-colors cursor-pointer group"
                   >
-                    {application.status}
-                  </span>
-                )}
-              </div>
+                    <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
+                    <span>{backDestination.label}</span>
+                  </button>
 
-              <h1 className="font-serif text-2xl sm:text-3xl font-bold text-charcoal tracking-tight truncate">
-                {application?.candidate_name || "Candidate Application"}
-              </h1>
+                  {application?.status && (
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-semibold border ${getApplicationStatusBadgeClass(
+                        application.status
+                      )}`}
+                    >
+                      {application.status}
+                    </span>
+                  )}
+                </div>
 
-              <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-[#78716C]">
-                <span>
-                  Applied for <span className="font-semibold text-charcoal">{jobTitle}</span> at{" "}
-                  <Link
-                    to={(job?.company_id || (job as any)?.companyId) ? `/company/${job?.company_id || (job as any)?.companyId}` : "/recruiter/company"}
-                    className="font-semibold text-charcoal hover:text-terracotta hover:underline transition-colors"
+                <h1 className="font-serif text-2xl sm:text-3xl font-bold text-charcoal tracking-tight truncate">
+                  {application?.candidate_name || "Candidate Application"}
+                </h1>
+
+                <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-[#78716C]">
+                  <span>
+                    Applied for <span className="font-semibold text-charcoal">{jobTitle}</span> at{" "}
+                    <Link
+                      to={(job?.company_id || (job as any)?.companyId) ? `/company/${job?.company_id || (job as any)?.companyId}` : "/recruiter/company"}
+                      className="font-semibold text-charcoal hover:text-terracotta hover:underline transition-colors"
                   >
                     {companyName}
                   </Link>
@@ -429,6 +438,7 @@ export default function RecruiterApplicationDetailPage() {
                 )}
               </div>
             </div>
+          </div>
 
             {application && (
               <div className="flex flex-wrap items-center gap-2.5 shrink-0">

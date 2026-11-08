@@ -16,6 +16,8 @@ LOGOS_STORAGE_DIR = Path(__file__).resolve().parent.parent / "storage" / "logos"
 
 def get_supabase_config() -> Tuple[str, str, str]:
     supabase_url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
+    if not supabase_url:
+        supabase_url = "https://yyrihnpnlvkmnlgoikrw.supabase.co"
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY") or ""
     supabase_bucket = os.getenv("SUPABASE_BUCKET") or "resumes"
     return supabase_url, supabase_key, supabase_bucket
@@ -35,8 +37,6 @@ def get_image_mime_type(ext: str, default_mime: str = "image/png") -> str:
         return "image/jpeg"
     if cleaned == "webp":
         return "image/webp"
-    if cleaned == "svg":
-        return "image/svg+xml"
     return default_mime or "application/octet-stream"
 
 
@@ -167,48 +167,44 @@ async def upload_company_logo_file(
 ) -> Dict[str, Any]:
     safe_name = sanitize_filename(filename)
     ext = Path(safe_name).suffix.lower()
-    if ext not in (".png", ".jpg", ".jpeg", ".webp", ".svg"):
+    if ext not in (".png", ".jpg", ".jpeg", ".webp"):
         ext = ".png"
 
-    storage_subpath = f"{company_id}/logo{ext}"
+    unique_prefix = uuid.uuid4().hex[:12]
+    storage_subpath = f"companies/{company_id}/{unique_prefix}_{safe_name}"
     storage_path = f"company-logos/{storage_subpath}"
     mime = get_image_mime_type(ext, content_type)
 
-    supabase_url, supabase_key, supabase_bucket = get_supabase_config()
+    supabase_url, supabase_key, _ = get_supabase_config()
+    if not (supabase_url and supabase_key):
+        raise RuntimeError("Supabase storage credentials are not configured. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.")
+
+    endpoint = f"{supabase_url}/storage/v1/object/company-logos/{storage_subpath}"
+    headers = {
+        "Authorization": f"Bearer {supabase_key}",
+        "apikey": supabase_key,
+        "Content-Type": mime,
+        "x-upsert": "true",
+    }
     file_url = None
 
-    if supabase_url and supabase_key:
-        endpoint = f"{supabase_url}/storage/v1/object/{supabase_bucket}/{storage_path}"
-        headers = {
-            "Authorization": f"Bearer {supabase_key}",
-            "apikey": supabase_key,
-            "Content-Type": mime,
-            "x-upsert": "true",
-        }
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                res = await client.post(endpoint, content=content, headers=headers)
-                if res.status_code in (200, 201):
-                    file_url = f"{supabase_url}/storage/v1/object/public/{supabase_bucket}/{storage_path}"
-                elif res.status_code == 404:
-                    created = await ensure_supabase_bucket(client, supabase_url, supabase_key, supabase_bucket)
-                    if created:
-                        retry_res = await client.post(endpoint, content=content, headers=headers)
-                        if retry_res.status_code in (200, 201):
-                            file_url = f"{supabase_url}/storage/v1/object/public/{supabase_bucket}/{storage_path}"
-        except Exception:
-            file_url = None
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        res = await client.post(endpoint, content=content, headers=headers)
+        if res.status_code in (200, 201):
+            file_url = f"{supabase_url}/storage/v1/object/public/company-logos/{storage_subpath}"
+        elif res.status_code == 404:
+            created = await ensure_supabase_bucket(client, supabase_url, supabase_key, "company-logos")
+            if created:
+                retry_res = await client.post(endpoint, content=content, headers=headers)
+                if retry_res.status_code in (200, 201):
+                    file_url = f"{supabase_url}/storage/v1/object/public/company-logos/{storage_subpath}"
 
-    # Graceful fallback to local storage if Supabase environment variables are missing or upload fails
     if not file_url:
-        target_path = LOGOS_STORAGE_DIR / storage_subpath
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_bytes(content)
-        file_url = f"/api/storage/logos/{storage_subpath}"
+        raise RuntimeError("Failed to persist company logo to Supabase Storage.")
 
     return {
         "file_url": file_url,
-        "file_name": f"logo{ext}",
+        "file_name": safe_name,
         "storage_path": storage_path,
         "file_size": len(content),
         "content_type": mime,
@@ -222,27 +218,34 @@ async def delete_storage_file(storage_path_or_url: str) -> None:
     supabase_url, supabase_key, supabase_bucket = get_supabase_config()
     clean_path = storage_path_or_url.split("?")[0].strip()
 
-    is_supabase_url = "/storage/v1/object/public/" in clean_path
-    if is_supabase_url:
-        parts = clean_path.split(f"/{supabase_bucket}/", 1)
-        if len(parts) > 1:
-            clean_path = parts[1]
+    target_bucket = supabase_bucket
+    target_object_path = clean_path
+
+    if "/storage/v1/object/public/" in clean_path:
+        after_public = clean_path.split("/storage/v1/object/public/", 1)[1]
+        parts = after_public.split("/", 1)
+        if len(parts) == 2:
+            target_bucket = parts[0]
+            target_object_path = parts[1]
         else:
             return
     elif clean_path.startswith("http://") or clean_path.startswith("https://"):
         return
     elif clean_path.startswith("/api/storage/"):
-        clean_path = clean_path.replace("/api/storage/", "", 1)
-        if clean_path.startswith("resumes/"):
-            clean_path = clean_path.replace("resumes/", "", 1)
-        elif clean_path.startswith("logos/"):
-            clean_path = clean_path.replace("logos/", "", 1)
-        elif clean_path.startswith("avatars/"):
-            clean_path = clean_path.replace("avatars/", "", 1)
+        target_object_path = clean_path.replace("/api/storage/", "", 1)
+        if target_object_path.startswith("resumes/"):
+            target_object_path = target_object_path.replace("resumes/", "", 1)
+            target_bucket = "resumes"
+        elif target_object_path.startswith("logos/"):
+            target_object_path = target_object_path.replace("logos/", "", 1)
+            target_bucket = "company-logos"
+        elif target_object_path.startswith("avatars/"):
+            target_object_path = target_object_path.replace("avatars/", "", 1)
+            target_bucket = supabase_bucket
 
-    if supabase_url and supabase_key and clean_path and not clean_path.startswith("/"):
+    if supabase_url and supabase_key and target_object_path and not target_object_path.startswith("/"):
         try:
-            endpoint = f"{supabase_url}/storage/v1/object/{supabase_bucket}/{clean_path}"
+            endpoint = f"{supabase_url}/storage/v1/object/{target_bucket}/{target_object_path}"
             headers = {
                 "Authorization": f"Bearer {supabase_key}",
                 "apikey": supabase_key,
@@ -271,5 +274,3 @@ async def delete_storage_file(storage_path_or_url: str) -> None:
                         parent.rmdir()
         except Exception:
             pass
-
-

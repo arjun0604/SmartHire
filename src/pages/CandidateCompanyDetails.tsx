@@ -17,6 +17,7 @@ import { SiteHeader } from "../components/site-header"
 import { useUser } from "../context/UserContext"
 import { fetchCompanyByIdApi, getBackendUrl, type CompanyDetails } from "../utils/api"
 import { getInitials } from "../utils/formatters"
+import { CompanyLogo } from "../components/common/CompanyLogo"
 
 export default function CandidateCompanyDetails() {
   const { companyId } = useParams<{ companyId: string }>();
@@ -131,18 +132,12 @@ export default function CandidateCompanyDetails() {
             <div className="rounded-2xl border border-[#EBE6DD] bg-white p-5 sm:p-7 shadow-2xs space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5">
                 <div className="flex items-start gap-4">
-                  {company.logo_url && !logoLoadFailed ? (
-                    <img
-                      src={getBackendUrl(company.logo_url)}
-                      alt={company.name}
-                      onError={() => setLogoLoadFailed(true)}
-                      className="size-16 sm:size-20 rounded-2xl border border-[#E6E0D6] bg-cream object-contain p-1 shrink-0"
-                    />
-                  ) : (
-                    <div className="size-16 sm:size-20 rounded-2xl bg-cream border border-[#E6E0D6] flex items-center justify-center text-xl font-bold font-serif text-charcoal shrink-0">
-                      {getInitials(company.name)}
-                    </div>
-                  )}
+                  <CompanyLogo
+                    logoUrl={company.logo_url}
+                    companyName={company.name}
+                    className="size-16 sm:size-20 rounded-2xl border border-[#E6E0D6] bg-cream object-contain p-1 shrink-0"
+                    fallbackClassName="text-xl"
+                  />
 
                   <div>
                     <div className="flex items-center gap-2 flex-wrap mb-1">

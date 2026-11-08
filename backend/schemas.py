@@ -463,11 +463,6 @@ class JobBase(BaseModel):
             raise ValueError("Department must contain letters or numbers.")
         return s
 
-    @field_validator("deadline")
-    @classmethod
-    def validate_deadline_field(cls, v: Optional[date]) -> Optional[date]:
-        return _validate_deadline_val(v)
-
     @field_validator("salary_min", "salary_max", mode="before")
     @classmethod
     def parse_salary(cls, v):
@@ -508,6 +503,11 @@ class JobCreate(JobBase):
     company_name: Optional[str] = Field(None, max_length=255)
     required_skills: List[str] = Field(default_factory=list, max_length=50)
     preferred_skills: List[str] = Field(default_factory=list, max_length=50)
+
+    @field_validator("deadline")
+    @classmethod
+    def validate_deadline_field(cls, v: Optional[date]) -> Optional[date]:
+        return _validate_deadline_val(v)
 
     @field_validator("required_skills", "preferred_skills")
     @classmethod
@@ -699,6 +699,11 @@ class JobResponse(JobBase):
             return ""
         return str(v)
 
+    @field_validator("deadline")
+    @classmethod
+    def validate_deadline_field(cls, v: Optional[date]) -> Optional[date]:
+        return v
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -791,6 +796,8 @@ class ApplicationResponse(BaseModel):
     candidate_dob: Optional[date] = None
     job_title: Optional[str] = None
     company_name: Optional[str] = None
+    company_logo: Optional[str] = None
+    companyLogo: Optional[str] = None
     resume_name: Optional[str] = None
     resume_url: Optional[str] = None
     skills: List[str] = Field(default_factory=list)

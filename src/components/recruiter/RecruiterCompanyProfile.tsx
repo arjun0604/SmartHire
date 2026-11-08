@@ -1,6 +1,9 @@
 import * as React from "react"
 import { Building2, Globe, MapPin, Briefcase, Users, Calendar, Upload, Trash2, CheckCircle2, Loader2, AlertCircle, ChevronDown } from "lucide-react"
 import { fetchMyCompanyApi, updateMyCompanyApi, uploadCompanyLogoApi, getBackendUrl } from "../../utils/api"
+import { CompanyLogo } from "../common/CompanyLogo"
+import { useAppDispatch } from "../../store"
+import { fetchRecruiterJobsThunk } from "../../store/slices/jobsSlice"
 import {
   validateCompanyName,
   validateMeaningfulText,
@@ -21,6 +24,7 @@ const COMPANY_SIZES = [
 ];
 
 export function RecruiterCompanyProfile() {
+  const dispatch = useAppDispatch();
   const [companyName, setCompanyName] = React.useState("");
   const [logoUrl, setLogoUrl] = React.useState("");
   const [industry, setIndustry] = React.useState("");
@@ -37,6 +41,9 @@ export function RecruiterCompanyProfile() {
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const [logoLoadFailed, setLogoLoadFailed] = React.useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = React.useState(false);
+  const [logoSuccessMessage, setLogoSuccessMessage] = React.useState<string | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = React.useState<string | null>(null);
 
   const logoInputRef = React.useRef<HTMLInputElement>(null);
   const fieldRefs = React.useRef<Record<string, HTMLElement | null>>({});
@@ -90,9 +97,9 @@ export function RecruiterCompanyProfile() {
     if (!file) return;
 
     const ext = file.name.split(".").pop()?.toLowerCase();
-    const validExtensions = ["png", "jpg", "jpeg", "webp", "svg"];
+    const validExtensions = ["png", "jpg", "jpeg", "webp"];
     if (!file.type.startsWith("image/") && (!ext || !validExtensions.includes(ext))) {
-      setErrorMessage("Please upload a valid image file (PNG, JPG, WEBP, or SVG).");
+      setErrorMessage("Please upload a valid image file (PNG, JPG, or WEBP).");
       if (logoInputRef.current) logoInputRef.current.value = "";
       return;
     }
@@ -103,20 +110,30 @@ export function RecruiterCompanyProfile() {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage("Company logo image size must be less than 5MB.");
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorMessage("Company logo image size must be less than 2MB.");
       if (logoInputRef.current) logoInputRef.current.value = "";
       return;
     }
 
     setErrorMessage(null);
+    setLogoSuccessMessage(null);
+    const preview = URL.createObjectURL(file);
+    setLogoPreviewUrl(preview);
+    setIsUploadingLogo(true);
+
     try {
       const res = await uploadCompanyLogoApi(file);
-      setLogoUrl(res.logo_url);
+      setLogoUrl(res.logo_url || "");
       setLogoLoadFailed(false);
+      setLogoSuccessMessage("Company logo updated successfully.");
+      dispatch(fetchRecruiterJobsThunk({ force: true }));
     } catch {
       setErrorMessage("Failed to upload company logo. Please try again.");
     } finally {
+      URL.revokeObjectURL(preview);
+      setLogoPreviewUrl(null);
+      setIsUploadingLogo(false);
       if (logoInputRef.current) logoInputRef.current.value = "";
     }
   };
@@ -255,6 +272,13 @@ export function RecruiterCompanyProfile() {
         </div>
       )}
 
+      {logoSuccessMessage && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/90 px-3.5 py-2 text-xs font-medium text-emerald-800 animate-in fade-in-0 duration-150">
+          <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
+          <span>{logoSuccessMessage}</span>
+        </div>
+      )}
+
       {errorMessage && (
         <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50/90 px-3.5 py-2 text-xs font-medium text-red-800 animate-in fade-in-0 duration-150">
           <AlertCircle className="size-3.5 text-red-600 shrink-0" />
@@ -270,16 +294,17 @@ export function RecruiterCompanyProfile() {
 
         <div className="flex items-center gap-3.5 pb-0.5">
           <div className="relative shrink-0">
-            <div className="size-15 sm:size-16 rounded-xl border-2 border-[#E6E0D6] bg-cream flex items-center justify-center overflow-hidden shadow-xs">
-              {logoUrl && !logoLoadFailed ? (
-                <img
-                  src={getBackendUrl(logoUrl)}
-                  alt={companyName || "Logo"}
-                  onError={() => setLogoLoadFailed(true)}
-                  className="size-full object-cover"
-                />
-              ) : (
-                <Building2 className="size-7 sm:size-8 text-[#A8A199]" />
+            <div className="size-15 sm:size-16 rounded-xl border-2 border-[#E6E0D6] bg-cream flex items-center justify-center overflow-hidden shadow-xs relative">
+              <CompanyLogo
+                logoUrl={logoPreviewUrl || logoUrl}
+                companyName={companyName}
+                className="size-full object-contain p-1 rounded-xl"
+                fallbackClassName="rounded-xl border-0 text-xl"
+              />
+              {isUploadingLogo && (
+                <div className="absolute inset-0 bg-white/75 backdrop-blur-xs flex items-center justify-center rounded-xl">
+                  <Loader2 className="size-5 animate-spin text-terracotta" />
+                </div>
               )}
             </div>
           </div>
@@ -288,22 +313,28 @@ export function RecruiterCompanyProfile() {
             <input
               ref={logoInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+              accept="image/png,image/jpeg,image/webp"
               className="hidden"
+              disabled={isUploadingLogo}
               onChange={handleLogoChange}
             />
 
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                disabled={isUploadingLogo}
                 onClick={() => logoInputRef.current?.click()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E6E0D6] bg-white px-2.5 py-1 text-xs font-medium text-charcoal shadow-3xs transition-colors hover:border-terracotta/40 hover:bg-cream cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E6E0D6] bg-white px-2.5 py-1 text-xs font-medium text-charcoal shadow-3xs transition-colors hover:border-terracotta/40 hover:bg-cream cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Upload className="size-3 text-terracotta" />
-                <span>{logoUrl ? "Replace Logo" : "Upload Logo"}</span>
+                {isUploadingLogo ? (
+                  <Loader2 className="size-3 animate-spin text-terracotta" />
+                ) : (
+                  <Upload className="size-3 text-terracotta" />
+                )}
+                <span>{isUploadingLogo ? "Uploading..." : (logoUrl ? "Replace Logo" : "Upload Logo")}</span>
               </button>
 
-              {logoUrl && (
+              {logoUrl && !isUploadingLogo && (
                 <button
                   type="button"
                   onClick={() => setLogoUrl("")}
@@ -315,7 +346,7 @@ export function RecruiterCompanyProfile() {
               )}
             </div>
 
-            <span className="text-[10px] text-[#A8A199]">Square PNG, JPG, or WEBP &lt; 5MB</span>
+            <span className="text-[10px] text-[#A8A199]">Square PNG, JPG, or WEBP &lt; 2MB</span>
           </div>
         </div>
 

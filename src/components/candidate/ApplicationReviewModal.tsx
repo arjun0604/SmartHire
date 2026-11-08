@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { CheckCircle2, FileText, Send, X, Upload, AlertCircle, ChevronDown, Check, Loader2, XCircle, RotateCcw, HelpCircle, ArrowUpRight } from "lucide-react"
-import { useAppDispatch } from "../../store"
+import { useAppDispatch, useAppSelector } from "../../store"
 import type { Job } from "../../store/slices/jobsSlice"
 import { createApplicationThunk } from "../../store/slices/applicationsSlice"
 import { useUser } from "../../context/UserContext"
@@ -32,6 +32,7 @@ export function ApplicationReviewModal({
 }: ApplicationReviewModalProps) {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const candidateApplications = useAppSelector((state) => state.applications.candidateApplications);
   const { profile, uploadResume, updateCandidate } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -262,6 +263,22 @@ export function ApplicationReviewModal({
           : typeof err === "string"
           ? err
           : "Failed to submit application. Please try again.";
+
+      const existingApp = candidateApplications.find((a) => a.job_id === job.id);
+      if (
+        (typeof msg === "string" && msg.toLowerCase().includes("already applied")) ||
+        existingApp
+      ) {
+        if (existingApp?.id) {
+          setCreatedAppId(existingApp.id);
+        }
+        if (onSubmitted) {
+          onSubmitted(job.id);
+        }
+        setStep("submitted");
+        return;
+      }
+
       setSubmitError(msg);
       setSubmissionErrorMessage(msg);
       setStep("error");

@@ -46,7 +46,7 @@ def to_numeric_salary_str(val) -> Optional[str]:
 
 
 def format_job_response(job: Job) -> JobResponse:
-    company_name = job.company.name if job.company else "Meridian Labs"
+    company_name = job.company.name if job.company else ""
     company_logo = job.company.logo_url if job.company else None
 
     req_skills = [js.skill.name for js in job.job_skills if js.is_required and js.skill]

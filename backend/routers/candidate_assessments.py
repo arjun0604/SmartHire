@@ -435,11 +435,6 @@ def save_assessment_answer(
 ):
     attempt = (
         db.query(AssessmentAttempt)
-        .options(
-            selectinload(AssessmentAttempt.attempt_questions).joinedload(
-                AssessmentAttemptQuestion.question
-            )
-        )
         .filter(AssessmentAttempt.id == attempt_id)
         .first()
     )

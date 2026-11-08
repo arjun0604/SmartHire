@@ -108,12 +108,22 @@ def test_setup(db_session: Session):
     }
 
     try:
-        db_session.query(MCQQuestion).filter(
-            MCQQuestion.job_id.in_(
-                db_session.query(Job.id).filter(Job.company_id.in_([company_a.id, company_b.id]))
-            )
-        ).delete(synchronize_session=False)
-        db_session.query(Job).filter(Job.company_id.in_([company_a.id, company_b.id])).delete(synchronize_session=False)
+        test_job_ids = [j.id for j in db_session.query(Job.id).filter(Job.company_id.in_([company_a.id, company_b.id])).all()]
+        if test_job_ids:
+            test_app_ids = [a.id for a in db_session.query(Application.id).filter(Application.job_id.in_(test_job_ids)).all()]
+            test_attempt_ids = [a.id for a in db_session.query(AssessmentAttempt.id).filter(AssessmentAttempt.job_id.in_(test_job_ids)).all()]
+            if test_attempt_ids:
+                db_session.query(AssessmentAttemptQuestion).filter(AssessmentAttemptQuestion.attempt_id.in_(test_attempt_ids)).delete(synchronize_session=False)
+                db_session.query(AssessmentAttempt).filter(AssessmentAttempt.id.in_(test_attempt_ids)).delete(synchronize_session=False)
+            if test_app_ids:
+                db_session.query(ApplicationStatusHistory).filter(ApplicationStatusHistory.application_id.in_(test_app_ids)).delete(synchronize_session=False)
+                db_session.query(CandidateJobMatch).filter(CandidateJobMatch.application_id.in_(test_app_ids)).delete(synchronize_session=False)
+                db_session.query(Application).filter(Application.id.in_(test_app_ids)).delete(synchronize_session=False)
+            db_session.query(MCQQuestion).filter(MCQQuestion.job_id.in_(test_job_ids)).delete(synchronize_session=False)
+            db_session.query(CandidateJobMatch).filter(CandidateJobMatch.job_id.in_(test_job_ids)).delete(synchronize_session=False)
+            db_session.query(JobSkill).filter(JobSkill.job_id.in_(test_job_ids)).delete(synchronize_session=False)
+            db_session.query(SavedJob).filter(SavedJob.job_id.in_(test_job_ids)).delete(synchronize_session=False)
+            db_session.query(Job).filter(Job.id.in_(test_job_ids)).delete(synchronize_session=False)
         db_session.query(Recruiter).filter(Recruiter.id.in_([recruiter_a.id, recruiter_b.id])).delete(synchronize_session=False)
         db_session.query(User).filter(User.id.in_([user_a.id, user_b.id])).delete(synchronize_session=False)
         db_session.query(Company).filter(Company.id.in_([company_a.id, company_b.id])).delete(synchronize_session=False)
@@ -714,6 +724,10 @@ def test_assessment_configuration_validation_and_candidate_flow(db_session: Sess
             db_session.query(AssessmentAttemptQuestion).filter(AssessmentAttemptQuestion.attempt_id.in_(att_ids)).delete(synchronize_session=False)
             db_session.query(AssessmentAttempt).filter(AssessmentAttempt.id.in_(att_ids)).delete(synchronize_session=False)
         db_session.query(MCQQuestion).filter(MCQQuestion.job_id == job.id).delete(synchronize_session=False)
+        app_ids = [r[0] for r in db_session.query(Application.id).filter(Application.job_id == job.id).all()]
+        if app_ids:
+            db_session.query(ApplicationStatusHistory).filter(ApplicationStatusHistory.application_id.in_(app_ids)).delete(synchronize_session=False)
+            db_session.query(CandidateJobMatch).filter(CandidateJobMatch.application_id.in_(app_ids)).delete(synchronize_session=False)
         db_session.query(CandidateJobMatch).filter(CandidateJobMatch.job_id == job.id).delete(synchronize_session=False)
         db_session.query(Application).filter(Application.job_id == job.id).delete(synchronize_session=False)
         db_session.query(Job).filter(Job.id == job.id).delete(synchronize_session=False)

@@ -1,5 +1,4 @@
 from pathlib import Path
-import xml.etree.ElementTree as ET
 from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
@@ -17,8 +16,8 @@ from backend.services.storage import upload_company_logo_file, delete_storage_fi
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
-ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
-MAX_IMAGE_SIZE = 5 * 1024 * 1024
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+MAX_IMAGE_SIZE = 2 * 1024 * 1024
 
 
 @router.get("/my", response_model=CompanyResponse)
@@ -41,7 +40,7 @@ def get_my_company(
 
 
 @router.put("/my", response_model=CompanyResponse)
-def update_my_company(
+async def update_my_company(
     payload: CompanyUpdateRequest,
     recruiter: Recruiter = Depends(get_current_recruiter),
     db: Session = Depends(get_db),
@@ -57,6 +56,8 @@ def update_my_company(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company record not found",
         )
+
+    old_logo_url = company.logo_url
 
     if payload.name is not None and payload.name.strip():
         company.name = payload.name.strip()
@@ -79,10 +80,14 @@ def update_my_company(
 
     db.commit()
     db.refresh(company)
+
+    if payload.logo_url is not None and old_logo_url and old_logo_url.split("?")[0] != (company.logo_url or "").split("?")[0]:
+        await delete_storage_file(old_logo_url)
+
     return company
 
 
-@router.post("/my/logo")
+@router.post("/my/logo", response_model=CompanyResponse)
 async def upload_my_company_logo(
     file: UploadFile = File(...),
     recruiter: Recruiter = Depends(get_current_recruiter),
@@ -104,7 +109,7 @@ async def upload_my_company_logo(
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid image format. Supported formats: PNG, JPG, JPEG, WEBP, SVG.",
+            detail="Invalid image format. Supported formats: PNG, JPG, JPEG, WEBP.",
         )
 
     content = await file.read()
@@ -117,7 +122,7 @@ async def upload_my_company_logo(
     if len(content) > MAX_IMAGE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File size exceeds the 5MB limit.",
+            detail="File size exceeds the 2MB limit.",
         )
 
     is_valid_logo = False
@@ -125,39 +130,36 @@ async def upload_my_company_logo(
         is_valid_logo = True
     elif content.startswith(b"RIFF") and len(content) >= 12 and content[8:12] == b"WEBP":
         is_valid_logo = True
-    elif ext == ".svg":
-        try:
-            root = ET.fromstring(content.decode("utf-8", errors="ignore"))
-            tag = root.tag.lower()
-            if tag.endswith("svg") or tag == "svg":
-                is_valid_logo = True
-        except Exception:
-            pass
 
     if not is_valid_logo:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File signature does not match a supported image or SVG format.",
+            detail="File signature does not match a supported image format (PNG, JPG, JPEG, WEBP).",
         )
 
     old_logo_url = company.logo_url
 
-    upload_result = await upload_company_logo_file(
-        company_id=str(company.id),
-        filename=file.filename or "logo.png",
-        content=content,
-        content_type=file.content_type or "image/png",
-    )
+    try:
+        upload_result = await upload_company_logo_file(
+            company_id=str(company.id),
+            filename=file.filename or "logo.png",
+            content=content,
+            content_type=file.content_type or "image/png",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to upload logo to storage: {str(e)}",
+        )
 
     company.logo_url = upload_result["file_url"]
     db.commit()
     db.refresh(company)
 
-    # Clean up previous logo file if it was replaced with a new path/file
     if old_logo_url and old_logo_url.split("?")[0] != company.logo_url.split("?")[0]:
         await delete_storage_file(old_logo_url)
 
-    return {"logo_url": company.logo_url}
+    return company
 
 
 @router.get("/{company_id}", response_model=CandidateCompanyDetailsResponse)

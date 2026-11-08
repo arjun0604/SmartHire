@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { ArrowUpRight, Bookmark, CheckCircle2 } from "lucide-react"
 import { useUser } from "../../context/UserContext"
 import { useAppSelector } from "../../store"
 import { formatSalaryRange } from "../../utils/salary"
-import { formatDisplayDate, getInitials } from "../../utils/formatters"
-import { getBackendUrl } from "../../utils/api"
+import { formatDisplayDate } from "../../utils/formatters"
+import { CompanyLogo } from "./CompanyLogo"
 import type { Job } from "../../data/jobs"
 
 interface JobCardProps {
@@ -20,11 +19,6 @@ export function JobCard({ job, fromContext }: JobCardProps) {
   const applications = useAppSelector((state) => state.applications.candidateApplications);
   const isApplied = applications.some((a) => a.job_id === job.id);
   const isSaved = savedJobIds.includes(job.id);
-  const [logoFailed, setLogoFailed] = useState(false);
-
-  useEffect(() => {
-    setLogoFailed(false);
-  }, [job.companyLogo]);
 
   const handleToggleSave = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -86,18 +80,12 @@ export function JobCard({ job, fromContext }: JobCardProps) {
       className="rounded-2xl border border-[#E6E0D6] bg-white p-4 shadow-2xs hover:border-terracotta/40 hover:shadow-xs transition-all cursor-pointer"
     >
       <div className="flex items-center justify-between gap-2 mb-2">
-        {job.companyLogo && !logoFailed ? (
-          <img
-            src={getBackendUrl(job.companyLogo)}
-            alt={job.company}
-            onError={() => setLogoFailed(true)}
-            className="size-8.5 rounded-lg object-contain border border-[#E6E0D6] bg-cream p-0.5"
-          />
-        ) : (
-          <div className="size-8.5 rounded-lg bg-cream border border-[#E6E0D6] flex items-center justify-center text-[11px] font-bold font-serif text-charcoal shadow-3xs">
-            {getInitials(job.company)}
-          </div>
-        )}
+        <CompanyLogo
+          logoUrl={job.companyLogo}
+          companyName={job.company}
+          className="size-8.5 rounded-lg object-contain border border-[#E6E0D6] bg-cream p-0.5"
+          fallbackClassName="text-[11px] font-serif"
+        />
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-[11px] text-[#8E877D] font-normal">
             {job.postedRelative || "Recently"}

@@ -28,7 +28,7 @@ export default function RecruiterDashboard() {
     }
   }, [dispatch, profile?.role]);
 
-  const companyName = profile?.company || "Meridian Labs";
+  const companyName = profile?.company || "";
 
   const tabTitles: Record<string, string> = {
     overview: "Overview",

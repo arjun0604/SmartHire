@@ -38,8 +38,19 @@ function getHomeRoute(profile) {
 
 function PublicRoute({ children }) {
   const { isLoading, isAuthenticated } = useAuth0();
-  const { profile, isLoading: isProfileLoading } = useUser();
+  const { profile, isLoading: isProfileLoading, syncError, refreshUser } = useUser();
   const pending = isAuthCallbackPending();
+
+  if (syncError && !profile && isAuthenticated) {
+    return (
+      <AuthLoadingPage
+        title="Server connection issue"
+        subtitle={syncError}
+        error={syncError}
+        onRetry={refreshUser}
+      />
+    );
+  }
 
   if (isLoading || isProfileLoading || isAuthenticated || pending) {
     if (profile) return <Navigate to={getHomeRoute(profile)} replace />;
@@ -50,8 +61,19 @@ function PublicRoute({ children }) {
 
 function ProtectedRoute({ children, requireOnboarding = true, targetRole }) {
   const { isLoading, isAuthenticated } = useAuth0();
-  const { profile, isLoading: isProfileLoading } = useUser();
+  const { profile, isLoading: isProfileLoading, syncError, refreshUser } = useUser();
   const pending = isAuthCallbackPending();
+
+  if (syncError && !profile) {
+    return (
+      <AuthLoadingPage
+        title="Server connection issue"
+        subtitle={syncError}
+        error={syncError}
+        onRetry={refreshUser}
+      />
+    );
+  }
 
   if (isLoading || isProfileLoading || pending) {
     return <AuthLoadingPage />;

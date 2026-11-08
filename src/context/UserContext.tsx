@@ -22,12 +22,14 @@ import {
   updateAccountProfileApi,
   deleteAccountApi,
   getAvatarUrl,
+  getApiErrorMessage,
   type ResumeBackendResponse,
 } from "@utils/api"
 
 interface UserContextType {
   profile: UserProfile | null;
   isLoading: boolean;
+  syncError: string | null;
   savedJobIds: string[];
   toggleSaveJob: (jobId: string) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -44,6 +46,7 @@ interface UserContextType {
 const UserContext = createContext<UserContextType>({
   profile: null,
   isLoading: true,
+  syncError: null,
   savedJobIds: [],
   toggleSaveJob: async () => { },
   refreshUser: async () => { },
@@ -61,6 +64,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const { user, getAccessTokenSilently, isAuthenticated, isLoading: auth0Loading, logout } = useAuth0();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [savedJobIds, setSavedJobIds] = useState<string[]>([]);
   const isSyncingRef = useRef(false);
   const pendingSavesRef = useRef<Set<string>>(new Set());
@@ -85,6 +89,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     async function syncAuth() {
       if (isSyncingRef.current) return;
       isSyncingRef.current = true;
+      setSyncError(null);
 
       try {
         let token = "";
@@ -114,22 +119,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        let dbProfile: UserProfile = baseProfile;
-        try {
-          dbProfile = await syncProfileToBackend(baseProfile);
-        } catch (backendErr) {
-          console.warn("Backend sync failed, falling back to Auth0 profile:", backendErr);
-          dbProfile = {
-            ...baseProfile,
-            onboardingCompleted: true,
-          };
-        }
+        const dbProfile = await syncProfileToBackend(baseProfile);
 
         if (signupRole && typeof window !== "undefined") {
           localStorage.removeItem("smarthire_signup_role");
         }
         if (isMounted) {
           setProfile(dbProfile);
+          setSyncError(null);
           if (dbProfile.candidateId) {
             try {
               const saved = await fetchSavedJobIdsApi(dbProfile.candidateId);
@@ -143,9 +140,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (err) {
         console.error("Auth sync error:", err);
-        if (isMounted && user) {
-          const fallback = buildProfileFromAuth0(user);
-          setProfile({ ...fallback, onboardingCompleted: true });
+        if (isMounted) {
+          const errorMsg = getApiErrorMessage(err, "Unable to synchronize profile with server. Please try again.");
+          setSyncError(errorMsg);
         }
       } finally {
         isSyncingRef.current = false;
@@ -215,14 +212,27 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (!user) {
       setProfile(null);
       setSavedJobIds([]);
+      setSyncError(null);
       return;
     }
     if (isSyncingRef.current) return;
     isSyncingRef.current = true;
+    setSyncError(null);
     try {
+      const signupRole = typeof window !== "undefined" ? (localStorage.getItem("smarthire_signup_role") as UserRole | null) : null;
       const baseProfile = buildProfileFromAuth0(user);
+      if (signupRole) {
+        baseProfile.role = signupRole;
+        if (signupRole === "recruiter") {
+          baseProfile.company = null;
+        }
+      }
       const dbProfile = await syncProfileToBackend(baseProfile);
+      if (signupRole && typeof window !== "undefined") {
+        localStorage.removeItem("smarthire_signup_role");
+      }
       setProfile(dbProfile);
+      setSyncError(null);
       if (dbProfile.candidateId) {
         try {
           const saved = await fetchSavedJobIdsApi(dbProfile.candidateId);
@@ -233,6 +243,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error("Failed to refresh user:", err);
+      const errorMsg = getApiErrorMessage(err, "Unable to synchronize profile with server. Please try again.");
+      setSyncError(errorMsg);
     } finally {
       isSyncingRef.current = false;
     }
@@ -355,6 +367,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     clearAuthSession();
     setProfile(null);
     setSavedJobIds([]);
+    setSyncError(null);
     setIsLoading(false);
     logout({ openUrl: false }).catch(() => {});
   }, [logout]);
@@ -370,7 +383,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     <UserContext.Provider
       value={{
         profile,
-        isLoading: isLoading || (isAuthenticated && !profile),
+        isLoading: (isLoading || (isAuthenticated && !profile)) && !syncError,
+        syncError,
         savedJobIds,
         toggleSaveJob,
         refreshUser,

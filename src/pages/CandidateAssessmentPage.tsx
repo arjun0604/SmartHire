@@ -30,19 +30,87 @@ export function CandidateAssessmentPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [reviews, setReviews] = useState<Record<string, boolean>>({});
-  const [savingQuestionId, setSavingQuestionId] = useState<string | null>(null);
+  const [savingQuestionIds, setSavingQuestionIds] = useState<Set<string>>(new Set());
+  const [saveErrorQuestionIds, setSaveErrorQuestionIds] = useState<Set<string>>(new Set());
+  const [isSavingAndNext, setIsSavingAndNext] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
 
   const autoSubmittedRef = useRef(false);
+  const targetAnswersRef = useRef<Record<string, string | null>>({});
+  const persistedAnswersRef = useRef<Record<string, string | null>>({});
+  const inFlightPromisesRef = useRef<Record<string, Promise<void>>>({});
+
+  const saveQuestionAnswer = useCallback(
+    async (qId: string, nextValue: string | null): Promise<void> => {
+      if (!attempt) return;
+
+      targetAnswersRef.current[qId] = nextValue;
+      setSaveErrorQuestionIds((prev) => {
+        if (!prev.has(qId)) return prev;
+        const copy = new Set(prev);
+        copy.delete(qId);
+        return copy;
+      });
+
+      if (inFlightPromisesRef.current[qId]) {
+        return inFlightPromisesRef.current[qId];
+      }
+
+      if (persistedAnswersRef.current[qId] === nextValue) {
+        return;
+      }
+
+      const runner = (async () => {
+        setSavingQuestionIds((prev) => new Set(prev).add(qId));
+        try {
+          while (true) {
+            const currentTarget = targetAnswersRef.current[qId] ?? null;
+            if (persistedAnswersRef.current[qId] === currentTarget) {
+              break;
+            }
+            const valueToPersist = currentTarget;
+            await saveAssessmentAnswerApi(attempt.id, qId, valueToPersist);
+            persistedAnswersRef.current[qId] = valueToPersist;
+          }
+        } catch (err) {
+          setSaveErrorQuestionIds((prev) => new Set(prev).add(qId));
+          throw err;
+        } finally {
+          delete inFlightPromisesRef.current[qId];
+          setSavingQuestionIds((prev) => {
+            const copy = new Set(prev);
+            copy.delete(qId);
+            return copy;
+          });
+        }
+      })();
+
+      inFlightPromisesRef.current[qId] = runner;
+      return runner;
+    },
+    [attempt]
+  );
 
   const handleSubmit = useCallback(async () => {
     if (!attempt || isSubmitting) return;
 
     try {
       setIsSubmitting(true);
+
+      const pendingPromises = Object.values(inFlightPromisesRef.current);
+      if (pendingPromises.length > 0) {
+        await Promise.all(pendingPromises);
+      }
+
+      for (const [qId, target] of Object.entries(targetAnswersRef.current)) {
+        if (persistedAnswersRef.current[qId] !== target) {
+          await saveQuestionAnswer(qId, target);
+        }
+      }
+
       const res = await submitAssessmentApi(attempt.id);
       setIsSubmitted(true);
       setShowSubmitModal(false);
@@ -69,7 +137,7 @@ export function CandidateAssessmentPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [attempt, isSubmitting]);
+  }, [attempt, isSubmitting, saveQuestionAnswer]);
 
   useEffect(() => {
     let isMounted = true;
@@ -102,6 +170,8 @@ export function CandidateAssessmentPage() {
             initialReviews[q.question_id] = true;
           }
         });
+        targetAnswersRef.current = { ...initialAnswers };
+        persistedAnswersRef.current = { ...initialAnswers };
         setAnswers(initialAnswers);
         setReviews(initialReviews);
 
@@ -173,24 +243,18 @@ export function CandidateAssessmentPage() {
 
   const isTimeCritical = remainingSeconds !== null && remainingSeconds < 300;
 
-  const handleSelectOption = async (optionKey: string) => {
-    if (!attempt || !currentQuestion || isSubmitted || savingQuestionId) return;
+  const handleSelectOption = (optionKey: string) => {
+    if (!attempt || !currentQuestion || isSubmitted) return;
 
     const qId = currentQuestion.question_id;
     setAnswers((prev) => ({ ...prev, [qId]: optionKey }));
-    setSavingQuestionId(qId);
-
-    try {
-      await saveAssessmentAnswerApi(attempt.id, qId, optionKey);
-    } catch (err) {
+    saveQuestionAnswer(qId, optionKey).catch((err) => {
       console.error("Failed to save answer:", err);
-    } finally {
-      setSavingQuestionId(null);
-    }
+    });
   };
 
-  const handleClearResponse = async () => {
-    if (!attempt || !currentQuestion || isSubmitted || savingQuestionId) return;
+  const handleClearResponse = () => {
+    if (!attempt || !currentQuestion || isSubmitted) return;
 
     const qId = currentQuestion.question_id;
     setAnswers((prev) => {
@@ -198,15 +262,9 @@ export function CandidateAssessmentPage() {
       delete copy[qId];
       return copy;
     });
-    setSavingQuestionId(qId);
-
-    try {
-      await saveAssessmentAnswerApi(attempt.id, qId, null);
-    } catch (err) {
+    saveQuestionAnswer(qId, null).catch((err) => {
       console.error("Failed to clear response:", err);
-    } finally {
-      setSavingQuestionId(null);
-    }
+    });
   };
 
   const handleToggleReview = async () => {
@@ -225,18 +283,24 @@ export function CandidateAssessmentPage() {
   };
 
   const handleSaveAndNext = async () => {
-    if (attempt && currentQuestion && selectedForCurrent && savingQuestionId !== currentQuestion.question_id) {
-      try {
-        setSavingQuestionId(currentQuestion.question_id);
-        await saveAssessmentAnswerApi(attempt.id, currentQuestion.question_id, selectedForCurrent);
-      } catch (err) {
-        console.error("Failed to save answer:", err);
-      } finally {
-        setSavingQuestionId(null);
+    if (!attempt || !currentQuestion || isSubmitted || isSavingAndNext) return;
+
+    const qId = currentQuestion.question_id;
+    const target = answers[qId] ?? null;
+
+    try {
+      setIsSavingAndNext(true);
+      if (target !== null || persistedAnswersRef.current[qId] !== undefined) {
+        await saveQuestionAnswer(qId, target);
       }
-    }
-    if (currentIndex < totalQuestions - 1) {
-      setCurrentIndex((prev) => prev + 1);
+      if (currentIndex < totalQuestions - 1) {
+        setCurrentIndex((prev) => prev + 1);
+      }
+    } catch (err) {
+      console.error("Failed to save answer before moving next:", err);
+      alert("Failed to save answer. Please check your connection and try again.");
+    } finally {
+      setIsSavingAndNext(false);
     }
   };
 
@@ -481,16 +545,23 @@ export function CandidateAssessmentPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                {savingQuestionId === currentQuestion.question_id && (
+                {savingQuestionIds.has(currentQuestion.question_id) && (
                   <span className="text-[11px] text-terracotta flex items-center gap-1 font-medium">
                     <Loader2 className="size-3 animate-spin" /> Autosaving...
                   </span>
                 )}
-                {selectedForCurrent && savingQuestionId !== currentQuestion.question_id && (
-                  <span className="text-[11px] text-emerald-600 flex items-center gap-1 font-medium">
-                    <CheckCircle2 className="size-3" /> Answer saved
+                {saveErrorQuestionIds.has(currentQuestion.question_id) && (
+                  <span className="text-[11px] text-rose-600 flex items-center gap-1 font-medium">
+                    <AlertCircle className="size-3" /> Save failed
                   </span>
                 )}
+                {selectedForCurrent &&
+                  !savingQuestionIds.has(currentQuestion.question_id) &&
+                  !saveErrorQuestionIds.has(currentQuestion.question_id) && (
+                    <span className="text-[11px] text-emerald-600 flex items-center gap-1 font-medium">
+                      <CheckCircle2 className="size-3" /> Answer saved
+                    </span>
+                  )}
               </div>
             </div>
 
@@ -574,11 +645,20 @@ export function CandidateAssessmentPage() {
               <button
                 type="button"
                 onClick={handleSaveAndNext}
-                disabled={isSubmitted}
+                disabled={isSubmitted || isSavingAndNext}
                 className="inline-flex items-center justify-center gap-1.5 px-5 py-2 bg-charcoal hover:bg-black text-white rounded-xl text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
               >
-                <span>Save & Next</span>
-                <ChevronRight className="size-4" />
+                {isSavingAndNext ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Save & Next</span>
+                    <ChevronRight className="size-4" />
+                  </>
+                )}
               </button>
             </div>
           </main>

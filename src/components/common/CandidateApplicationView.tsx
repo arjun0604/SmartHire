@@ -12,6 +12,7 @@ import { formatSalaryRange } from "../../utils/salary"
 import { formatDisplayDate, getApplicationStatusBadgeClass } from "../../utils/formatters"
 import { fetchApplicationMatchApi, type MatchReport } from "../../utils/api"
 import { MatchReportModal } from "./MatchReportModal"
+import { CompanyLogo } from "./CompanyLogo"
 
 interface CandidateApplicationViewProps {
   application: Application;
@@ -53,7 +54,8 @@ export function CandidateApplicationView({
   const employmentStatusText = isEmployed ? "Employed" : "Not Employed";
 
   const jobTitle = application.job_title || job?.title || "Job Posting";
-  const companyName = application.company_name || job?.company || "Meridian Labs";
+  const companyName = application.company_name || job?.company || "";
+  const companyLogo = application.companyLogo || application.company_logo || job?.companyLogo;
   const department = job?.department || "Engineering";
   const jobLocation = job?.location || "Bengaluru, India";
   const workMode = job?.workMode || "Hybrid";
@@ -101,37 +103,45 @@ export function CandidateApplicationView({
   return (
     <div className="relative w-full max-w-5xl lg:max-w-6xl bg-white border border-[#E6E0D6] rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto">
       <div className="px-6 py-5 border-b border-[#F0ECE4] flex items-start justify-between bg-white shrink-0">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getApplicationStatusBadgeClass(application.status)}`}>
-              {application.status}
-            </span>
-            {application.ats_score !== undefined && application.ats_score !== null && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <Sparkles className="size-3 text-emerald-600" />
-                <span>ATS Score: {Math.round(application.ats_score)}%</span>
+        <div className="flex items-start gap-4">
+          <CompanyLogo
+            logoUrl={companyLogo}
+            companyName={companyName}
+            className="size-12 rounded-xl border border-[#E6E0D6] bg-cream p-1 shrink-0"
+            fallbackClassName="text-base"
+          />
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getApplicationStatusBadgeClass(application.status)}`}>
+                {application.status}
               </span>
-            )}
-            <button
-              type="button"
-              onClick={handleOpenMatchReport}
-              disabled={isMatchLoading}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors cursor-pointer"
-            >
-              {isMatchLoading ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3 text-purple-600" />}
-              <span>View Match Report</span>
-            </button>
-            <span className="text-xs text-[#8E877D] flex items-center gap-1">
-              <Calendar className="size-3 text-[#8E877D]" />
-              <span>Submitted on {formattedDate}</span>
-            </span>
+              {application.ats_score !== undefined && application.ats_score !== null && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Sparkles className="size-3 text-emerald-600" />
+                  <span>ATS Score: {Math.round(application.ats_score)}%</span>
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleOpenMatchReport}
+                disabled={isMatchLoading}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors cursor-pointer"
+              >
+                {isMatchLoading ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3 text-purple-600" />}
+                <span>View Match Report</span>
+              </button>
+              <span className="text-xs text-[#8E877D] flex items-center gap-1">
+                <Calendar className="size-3 text-[#8E877D]" />
+                <span>Submitted on {formattedDate}</span>
+              </span>
+            </div>
+            <h2 className="font-serif text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
+              {jobTitle}
+            </h2>
+            <p className="text-xs sm:text-sm text-[#78716C]">
+              <span className="font-semibold text-charcoal">{companyName}</span> &bull; {jobLocation} ({workMode})
+            </p>
           </div>
-          <h2 className="font-serif text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
-            {jobTitle}
-          </h2>
-          <p className="text-xs sm:text-sm text-[#78716C]">
-            <span className="font-semibold text-charcoal">{companyName}</span> &bull; {jobLocation} ({workMode})
-          </p>
         </div>
         <button
           type="button"

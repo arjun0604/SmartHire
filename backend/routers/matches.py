@@ -10,6 +10,7 @@ from backend.schemas import MatchReportResponse
 from backend.services.matcher import (
     compute_job_matching_fingerprint,
     format_months_to_display,
+    get_or_create_application_match,
     get_or_create_resume_match,
 )
 
@@ -201,6 +202,9 @@ def get_job_current_match(
             )
             .first()
         )
+        if not match:
+            match = get_or_create_application_match(db=db, application=application)
+            db.commit()
         if match:
             return format_match_response(match, job=application.job)
 
@@ -270,8 +274,6 @@ def get_application_match(
         .first()
     )
     if not match:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Application match not found",
-        )
+        match = get_or_create_application_match(db=db, application=application)
+        db.commit()
     return format_match_response(match, job=application.job)

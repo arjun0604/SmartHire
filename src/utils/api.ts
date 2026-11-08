@@ -1,4 +1,4 @@
-import axios from "axios"
+import axios, { isAxiosError } from "axios"
 import type { Job } from "../data/jobs"
 
 const rawApiUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || "";
@@ -41,8 +41,52 @@ export const apiClient = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 10000,
+  timeout: 60000,
 });
+
+export { isAxiosError };
+
+export function isTimeoutError(error: unknown): boolean {
+  if (isAxiosError(error)) {
+    return error.code === "ECONNABORTED" || Boolean(error.message && error.message.toLowerCase().includes("timeout"));
+  }
+  return false;
+}
+
+export function isNetworkError(error: unknown): boolean {
+  if (isAxiosError(error)) {
+    if (isTimeoutError(error)) return false;
+    return error.code === "ERR_NETWORK" || (!error.response && Boolean(error.request));
+  }
+  return false;
+}
+
+export function getApiErrorMessage(
+  error: unknown,
+  fallbackMessage = "An unexpected error occurred. Please try again."
+): string {
+  if (isTimeoutError(error)) {
+    return "Request timed out. Please try again.";
+  }
+  if (isNetworkError(error)) {
+    return "Network connection error. Please check your internet connection and try again.";
+  }
+  if (isAxiosError(error)) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === "string" && detail.trim()) {
+      return detail.trim();
+    }
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0];
+      if (typeof first === "string") return first;
+      if (typeof first?.msg === "string") return first.msg;
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallbackMessage;
+}
 
 if (initialToken) {
   apiClient.defaults.headers.common["Authorization"] = `Bearer ${initialToken}`;
@@ -230,17 +274,15 @@ export async function updateMyCompanyApi(payload: Partial<CompanyDetails>): Prom
   return normalizeCompany(response.data);
 }
 
-export async function uploadCompanyLogoApi(file: File): Promise<{ logo_url: string }> {
+export async function uploadCompanyLogoApi(file: File): Promise<CompanyDetails> {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await apiClient.post<{ logo_url: string }>("/companies/my/logo", formData, {
+  const response = await apiClient.post<CompanyDetails>("/companies/my/logo", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
   });
-  return {
-    logo_url: getBackendUrl(response.data.logo_url),
-  };
+  return normalizeCompany(response.data);
 }
 
 export async function fetchCompanyByIdApi(companyId: string): Promise<CompanyDetails> {
@@ -392,6 +434,8 @@ export interface Application {
   candidate_dob?: string | null;
   job_title?: string | null;
   company_name?: string | null;
+  company_logo?: string | null;
+  companyLogo?: string | null;
   resume_name?: string | null;
   resume_url?: string | null;
   skills?: string[];
@@ -432,14 +476,19 @@ export interface ApplicationCreatePayload {
 
 function normalizeApplication(app: Application): Application {
   if (!app) return app;
+  const rawLogo = app.companyLogo || app.company_logo;
   return {
     ...app,
+    company_logo: rawLogo ? getBackendUrl(rawLogo) : app.company_logo,
+    companyLogo: rawLogo ? getBackendUrl(rawLogo) : undefined,
     resume_url: app.resume_url ? getBackendUrl(app.resume_url) : app.resume_url,
   };
 }
 
 export async function createApplicationApi(payload: ApplicationCreatePayload): Promise<Application> {
-  const response = await apiClient.post<Application>("/applications", payload);
+  const response = await apiClient.post<Application>("/applications", payload, {
+    timeout: 90000,
+  });
   return normalizeApplication(response.data);
 }
 
@@ -587,7 +636,7 @@ export async function uploadResumeApi(candidateId: string, file: File): Promise<
     headers: {
       "Content-Type": "multipart/form-data",
     },
-    timeout: 45000,
+    timeout: 90000,
   });
   return normalizeResume(response.data);
 }
@@ -742,17 +791,23 @@ export interface MatchReport {
 }
 
 export async function fetchCurrentJobMatchApi(jobId: string): Promise<MatchReport> {
-  const response = await apiClient.get<MatchReport>(`/matches/jobs/${jobId}/current`);
+  const response = await apiClient.get<MatchReport>(`/matches/jobs/${jobId}/current`, {
+    timeout: 90000,
+  });
   return response.data;
 }
 
 export async function fetchResumeMatchApi(jobId: string): Promise<MatchReport> {
-  const response = await apiClient.get<MatchReport>(`/matches/jobs/${jobId}/resume`);
+  const response = await apiClient.get<MatchReport>(`/matches/jobs/${jobId}/resume`, {
+    timeout: 90000,
+  });
   return response.data;
 }
 
 export async function fetchApplicationMatchApi(applicationId: string): Promise<MatchReport> {
-  const response = await apiClient.get<MatchReport>(`/matches/applications/${applicationId}`);
+  const response = await apiClient.get<MatchReport>(`/matches/applications/${applicationId}`, {
+    timeout: 90000,
+  });
   return response.data;
 }
 
