@@ -17,9 +17,14 @@ LOGOS_STORAGE_DIR = Path(__file__).resolve().parent.parent / "storage" / "logos"
 def get_supabase_config() -> Tuple[str, str, str]:
     supabase_url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
     if not supabase_url:
+        db_url = os.getenv("DATABASE_URL") or ""
+        match = re.search(r"postgres\.([a-z0-9]+)@", db_url)
+        if match:
+            supabase_url = f"https://{match.group(1)}.supabase.co"
+    if not supabase_url:
         supabase_url = "https://yyrihnpnlvkmnlgoikrw.supabase.co"
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY") or ""
-    supabase_bucket = os.getenv("SUPABASE_BUCKET") or "resumes"
+    supabase_bucket = os.getenv("SUPABASE_BUCKET") or "company-logos"
     return supabase_url, supabase_key, supabase_bucket
 
 
@@ -200,7 +205,7 @@ async def upload_company_logo_file(
                     file_url = f"{supabase_url}/storage/v1/object/public/company-logos/{storage_subpath}"
 
     if not file_url:
-        raise RuntimeError("Failed to persist company logo to Supabase Storage.")
+        raise RuntimeError(f"Failed to persist company logo to Supabase Storage: {res.status_code} {res.text}")
 
     return {
         "file_url": file_url,

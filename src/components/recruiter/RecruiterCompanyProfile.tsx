@@ -128,8 +128,9 @@ export function RecruiterCompanyProfile() {
       setLogoLoadFailed(false);
       setLogoSuccessMessage("Company logo updated successfully.");
       dispatch(fetchRecruiterJobsThunk({ force: true }));
-    } catch {
-      setErrorMessage("Failed to upload company logo. Please try again.");
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || "Failed to upload company logo. Please try again.";
+      setErrorMessage(msg);
     } finally {
       URL.revokeObjectURL(preview);
       setLogoPreviewUrl(null);
